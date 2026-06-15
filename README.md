@@ -1,6 +1,12 @@
 # PlasticIceSheet.jl
 
+[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://fesmc.github.io/PlasticIceSheet.jl/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Fast, AD-friendly reconstruction of perfectly-plastic, steady-state ice sheets.
+
+📖 **Documentation: <https://fesmc.github.io/PlasticIceSheet.jl/>** — including a full
+[explanation of the algorithms](https://fesmc.github.io/PlasticIceSheet.jl/algorithms.html).
 
 Given a grounded-ice **margin/mask**, a **bed topography** `B`, and a **basal shear
 stress** field `τ`, it returns a glaciologically plausible ice **surface** `E` and
