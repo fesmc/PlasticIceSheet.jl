@@ -1,0 +1,36 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "PlasticIceSheet.jl"
+  description: "Fast, AD-friendly perfectly-plastic ice-sheet reconstruction"
+  repo-url: https://github.com/fesmc/PlasticIceSheet.jl
+  repo-actions: [issue]
+  page-navigation: true
+  navbar:
+    background: primary
+    search: true
+    left:
+      - text: "Home"
+        file: index.qmd
+      - text: "Algorithms"
+        file: algorithms.qmd
+      - text: "Usage"
+        file: usage.qmd
+      - text: "Design notes"
+        file: PLAN.md
+    right:
+      - icon: github
+        href: https://github.com/fesmc/PlasticIceSheet.jl
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap
+    html-math-method: katex
+    grid:
+      content-mode: standard

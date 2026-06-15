@@ -1,0 +1,196 @@
+---
+title: "Algorithms"
+---
+
+This page explains, end to end, how `PlasticIceSheet.jl` turns a margin, a bed, and a
+basal-shear-stress field into an ice sheet — and how it differentiates the result with
+respect to the shear stress.
+
+## 1. The governing equation
+
+The reconstruction assumes **perfectly plastic, steady-state** ice: the gravitational
+driving stress is everywhere balanced by the basal shear stress $\tau$. For an ice
+surface $E$, bed $B$, and thickness $H = E - B$, this balance is
+
+$$
+|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H},
+$$ {#eq-plastic}
+
+with $\rho_i$ the ice density and $g$ gravity. The right-hand side is a slope
+(dimensionless). @eq-plastic is a static **Hamilton–Jacobi equation**: the surface is
+built inward from the margin, where $H \to 0$. Its upwind (viscosity) solution
+automatically yields the correct envelope wherever ice converges, so ice divides, domes,
+and merging ice caps appear without any explicit flowline or saddle handling.
+
+This is the same physics as ICESHEET 1.0, but solved on a grid rather than by tracing
+characteristics.
+
+## 2. Solve for $H^2$, not $E$
+
+Near the margin $H \to 0$, so the driving slope $\tau/(\rho_i g H)$ in @eq-plastic
+**diverges**. Discretising @eq-plastic for $E$ directly is therefore inaccurate near the
+margin and biases the whole reconstruction thin. The fix is a change of variable.
+
+On a flat bed, @eq-plastic reads $|\nabla H| = \tau/(\rho_i g H)$. Multiplying by $2H$ and
+using $\nabla(H^2) = 2H\,\nabla H$,
+
+$$
+\bigl|\nabla (H^2)\bigr| = \frac{2\tau}{\rho_i\, g}.
+$$ {#eq-flat}
+
+The singularity is gone: $w \equiv H^2$ satisfies a **plain eikonal** $|\nabla w| = G$ with
+a finite right-hand side $G = 2\tau/(\rho_i g)$, and the boundary condition $w = 0$ at the
+margin is regular. Both solver modes work in $w = H^2$; the thickness is recovered as
+$H = \sqrt{w}$ and the surface as $E = H + B$.
+
+### `:flat` mode
+
+`:flat` solves @eq-flat exactly and drapes the result on the bed. It is the cheapest mode
+and is appropriate whenever bed relief is small compared with ice thickness (continental
+interiors). ICESHEET's own sensitivity tests indicate the bed-gradient terms are
+second-order except in mountainous terrain.
+
+## 3. `:hj` mode — the bed-gradient correction
+
+Over significant relief the bed slope $\nabla B$ enters the flux. Writing
+$\nabla E = \nabla H + \nabla B$ in @eq-plastic and carrying the algebra through in the
+$w = H^2$ variable gives, **exactly in one dimension**,
+
+$$
+|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla B \cdot \nabla w)\;-\;4\,w\,|\nabla B|^2\,},
+\qquad G = \frac{2\tau}{\rho_i g}.
+$$ {#eq-hj}
+
+Two properties make @eq-hj the right object to solve:
+
+- when $\nabla B = 0$ it reduces to the flat eikonal @eq-flat, so `:hj` and `:flat` agree
+  exactly on a flat bed;
+- it is written in $w = H^2$, so it inherits the regular margin behaviour of @eq-flat.
+
+The effective right-hand side depends on $\nabla w$ (through the $\nabla B\cdot\nabla w$
+term), so @eq-hj is not a pure eikonal. It is solved by an **outer fixed-point iteration**:
+freeze the right-hand side from the current $w$, solve the resulting constant-RHS eikonal
+for a candidate $w_c$, and update.
+
+### Damping is required
+
+The naive update $w \leftarrow \text{Eikonal}\!\left(\text{RHS}(w)\right)$ is **not
+contractive** — over real bed relief it oscillates indefinitely. The solver therefore uses
+an **under-relaxed (damped) Picard iteration**,
+
+$$
+w^{(k+1)} = (1-\alpha)\, w^{(k)} + \alpha\, \text{Eikonal}\!\left(\text{RHS}(w^{(k)})\right),
+$$
+
+with relaxation factor $\alpha = \texttt{relax}$ (default $0.5$). Damping converges the
+iteration to the same fixed point — i.e. to a vanishing residual (§6) — which is also what
+makes the implicit-differentiation gradient (§7) exact. Smaller $\alpha$ is more robust on
+steep beds but needs more iterations; beds whose relief approaches the ice thickness over a
+few cells may not converge at all (lower `relax`, raise `n_outer`, refine the grid, or fall
+back to `:flat`).
+
+## 4. The Godunov update
+
+The eikonal $|\nabla u| = F$ is discretised cell-by-cell with the first-order **Godunov
+upwind scheme**. At a cell with grid spacings $\Delta x, \Delta y$, let $a$ and $b$ be the
+smaller of the two neighbour values along each axis:
+
+$$
+a = \min(u_{i-1,j},\, u_{i+1,j}), \qquad b = \min(u_{i,j-1},\, u_{i,j+1}).
+$$
+
+The updated value is the smallest $u$ satisfying
+
+$$
+\left(\frac{(u-a)_+}{\Delta x}\right)^{2} + \left(\frac{(u-b)_+}{\Delta y}\right)^{2} = F^2,
+\qquad (\cdot)_+ = \max(\cdot, 0).
+$$
+
+In practice: try the two-sided quadratic; accept it only if the result exceeds both
+neighbours (both upwind terms active); otherwise take the smaller one-sided update
+$\min(a + F\,\Delta x,\; b + F\,\Delta y)$. This is `godunov_eikonal`, a pure function with
+no mutation or indexing — which is what lets the autodiff back ends differentiate it
+directly.
+
+## 5. Fast sweeping
+
+The discrete eikonal is solved by the **fast-sweeping method**: Gauss–Seidel updates that
+keep the monotone minimum,
+
+$$
+u_{i,j} \leftarrow \min\!\bigl(u_{i,j},\; \text{Godunov update}\bigr),
+$$
+
+applied over the four diagonal traversal orderings $(\nearrow, \nwarrow, \swarrow,
+\searrow)$ in rotation. Because each ordering captures characteristics flowing in one
+quadrant of directions, a handful of sweeps converges the whole field in $O(N)$ work, for
+any geometry. Interior cells start at $+\infty$; ice-free cells hold their boundary value
+(§6) so neighbour look-ups only ever read the working array.
+
+## 6. Boundary conditions
+
+The margin is the interface between mask (grounded ice) and ice-free cells. Ice-free cells
+carry the Dirichlet value:
+
+- **Land margin** ($B \ge$ sea level): $H = 0$, i.e. $w = 0$.
+- **Marine margin** ($B <$ sea level): the grounding line sits at the **flotation
+  thickness** — the thickness whose weight balances the local water column,
+  $$
+  H_{\text{flot}} = \frac{\rho_w}{\rho_i}\,\bigl(\text{sea level} - B\bigr), \qquad w = H_{\text{flot}}^2,
+  $$
+  reproducing ICESHEET's marine grounding-line treatment. The eikonal then grows the ice
+  inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum
+  surface slope *is* the plastic constraint the eikonal enforces.
+
+## 7. Differentiating with respect to $\tau$
+
+Because the solver is a pure function of $\tau$, an objective on the output (a misfit to an
+observed surface, a target volume, …) is differentiable — enabling **basal-shear-stress
+inversion**.
+
+### Forward mode
+
+For a scalar $\tau$ or a low-dimensional parameterization, `ForwardDiff` differentiates
+straight through `solve`. Cost scales with the number of parameters.
+
+### Reverse mode (implicit differentiation)
+
+For a full per-cell $\tau$ field, differentiating through the sweeps would be wasteful.
+Instead, the converged field satisfies an **optimality condition** — the Godunov residual
+
+$$
+r_{i,j}(w, \tau) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
+$$
+
+on ice cells (and $w - \text{bc} = 0$ off-ice). By the implicit function theorem, for a
+loss $L(w)$,
+
+$$
+\frac{\partial L}{\partial \tau}
+= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau},
+$$
+
+so the gradient costs a single linear solve with the residual Jacobian, **independent of
+the number of sweeps or outer iterations** and scalable to a full field. The forward fast
+sweep is treated as a black box; only the residual is differentiated (with `ForwardDiff`
+internally). This is wired up with
+[`ImplicitDifferentiation.jl`](https://github.com/JuliaDecisionFocusedLearning/ImplicitDifferentiation.jl)
+in a package extension, so any reverse-mode AD (e.g. Zygote) obtains the gradient.
+
+The `:flat` gradient is exact to machine precision; the `:hj` gradient is exact once the
+damped forward solve (§3) has driven the residual to $\approx 0$.
+
+::: {.callout-note}
+## NaN hygiene
+$\sqrt{w}$ has an infinite derivative at $w=0$. Wherever $\sqrt{w}$ is differentiated it is
+floored at $H_{\min}^2$, because the unguarded $\sqrt{0}$ derivative produces $\infty\cdot 0
+= \text{NaN}$ in the reverse pass (forward mode dodges this by branch selection).
+:::
+
+## 8. What was deliberately dropped
+
+Relative to ICESHEET 1.0, the grid Hamilton–Jacobi solver makes the following machinery
+unnecessary: method-of-characteristics flowline tracing, crossover detection (the
+motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level
+iteration loop, and the GMT projection/preprocessing pipeline. See the
+[Design notes](PLAN.md) for the full accounting.

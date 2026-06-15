@@ -1,0 +1,55 @@
+---
+title: "PlasticIceSheet.jl"
+subtitle: "Fast, AD-friendly perfectly-plastic ice-sheet reconstruction"
+---
+
+`PlasticIceSheet.jl` reconstructs a perfectly-plastic, steady-state ice sheet from three
+inputs — a grounded-ice **margin/mask**, a **bed topography** $B$, and a **basal shear
+stress** field $\tau$ — and returns a glaciologically plausible ice **surface** $E$ and
+**thickness** $H$. There is no time-stepping, no climate, and no ice dynamics.
+
+It is meant as a *complementary first-guess tool* next to a full dynamic model (e.g.
+[Yelmo](https://github.com/palma-ice/yelmo)) and an independent GIA / sea-level solver: to
+seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.
+
+## The idea in one equation
+
+The ice surface satisfies the perfectly-plastic balance — driving stress equals basal
+shear stress everywhere:
+
+$$
+|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = E - B .
+$$
+
+This is a static **Hamilton–Jacobi (eikonal) equation**. Solving it with an upwind grid
+scheme means saddles, domes, and coalescing ice caps emerge automatically from the
+viscosity solution — there is no flowline tracing, crossover detection, or saddle
+bookkeeping. See [Algorithms](algorithms.qmd) for the full derivation and numerics.
+
+## Quick start
+
+```julia
+using PlasticIceSheet
+
+nx, ny = 100, 100
+dx = dy = 2000.0                                   # grid spacing (m)
+bed  = zeros(nx, ny)                               # bed elevation B (m)
+mask = [hypot(i-50.5, j-50.5) <= 40 for i in 1:nx, j in 1:ny]
+τ    = 1.0e5                                       # basal shear stress (Pa)
+
+E, H = solve(bed, τ, mask; dx, dy, mode = :hj)     # :hj (default) or :flat
+```
+
+A full Hamilton–Jacobi solve on a 300×300 grid takes ~0.1 s. The basal shear stress
+$\tau$ is differentiable, enabling gradient-based [inversion](usage.qmd#inverting-for).
+
+## Origin
+
+This is a clean-room simplification and modernization of **ICESHEET 1.0**
+([Gowan et al. 2016, *GMD*](https://doi.org/10.5194/gmd-9-1673-2016);
+[source](https://github.com/evangowan/icesheet)). The core physics — one published
+equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery
+is replaced by a grid eikonal solver on the order of a couple hundred lines. The
+[Design notes](PLAN.md) record what was kept, simplified, and dropped, and why.
+
+`PlasticIceSheet.jl` is MIT-licensed.

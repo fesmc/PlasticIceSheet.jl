@@ -1,0 +1,102 @@
+---
+title: "Usage"
+---
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add(url = "https://github.com/fesmc/PlasticIceSheet.jl")
+```
+
+The core package depends only on `LinearAlgebra`. Reverse-mode differentiation and NetCDF
+I/O are loaded on demand through package extensions (below).
+
+## Solving
+
+```julia
+using PlasticIceSheet
+
+E, H = solve(bed, τ, mask; dx, dy, mode = :hj)
+```
+
+| argument | meaning |
+|---|---|
+| `bed`  | bed elevation $B$ (m), `nx × ny` matrix |
+| `τ`    | basal shear stress (Pa); a scalar is broadcast to a uniform field |
+| `mask` | `true` where grounded ice exists; the margin is the mask boundary |
+| `dx`, `dy` | grid spacings (m) |
+
+Key options (see the docstring for the rest):
+
+- `mode` — `:hj` (default, full Hamilton–Jacobi over arbitrary relief) or `:flat`
+  (flat-bed eikonal, cheapest; exact when relief ≪ thickness).
+- `params` — a `PlasticParams` (densities, gravity, sea level, `H_min`).
+- `n_outer`, `outer_tol`, `relax` — `:hj` damped fixed-point controls. `relax` ∈ (0,1] is
+  the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.
+
+Returns `(E, H)`; ice-free cells have `H = 0`, `E = bed`.
+
+### Diagnostics
+
+```julia
+ice_volume(H, dx, dy)            # m³
+ice_area(mask, dx, dy)           # m²
+surface_misfit(E, E_obs, mask)   # mean-squared surface misfit over ice
+```
+
+## Inverting for $\tau$
+
+The solver is differentiable with respect to $\tau$. See [Algorithms §7](algorithms.qmd#differentiating-with-respect-to)
+for the theory.
+
+### Forward mode — scalar / low-dimensional $\tau$
+
+```julia
+using ForwardDiff
+loss(τ) = surface_misfit(first(solve(bed, τ, mask; dx, dy)), E_obs, mask)
+g = ForwardDiff.derivative(loss, 1.0e5)
+```
+
+### Reverse mode — full per-cell $\tau$ field
+
+Load the extension triggers, then differentiate `differentiable_thickness` with any
+reverse-mode AD:
+
+```julia
+using ImplicitDifferentiation, ADTypes, ForwardDiff, Zygote
+
+loss(τ) = surface_misfit(differentiable_thickness(τ, bed, mask; dx, dy) .+ bed, E_obs, mask)
+g = Zygote.gradient(loss, τ)[1]      # gradient w.r.t. the whole τ field
+```
+
+A complete, runnable Adam-based recovery of a spatially-varying $\tau$ from an observed
+surface is in
+[`examples/invert_tau.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl).
+It drives the misfit down by four orders of magnitude and recovers the two-region truth to
+within a fraction of a kPa.
+
+::: {.callout-tip}
+The default reverse-mode linear solver is direct (robust for modest grids). For very large
+fields, pass an iterative solver — see the `differentiable_thickness` docstring.
+:::
+
+## NetCDF I/O
+
+```julia
+using NCDatasets
+
+inp = load_plastic_inputs("inputs.nc")             # (; bed, τ, mask, dx, dy, x, y)
+E, H = solve(inp.bed, inp.τ, inp.mask; inp.dx, inp.dy)
+save_reconstruction("out.nc", E, H; x = inp.x, y = inp.y)
+```
+
+## Caveats
+
+- Steady-state geometry only — biased thick/peaked where the real ice was streaming or
+  dynamic (low effective driving stress the plastic assumption cannot see).
+- $\tau$ carries essentially all the uncertainty. For a first guess a constant
+  (~50–100 kPa) or a bed-keyed value is fine; do not over-interpret the result as a
+  constrained reconstruction.
+- Very steep beds (relief approaching the ice thickness over a few cells) may not converge
+  in `:hj` — see [Algorithms §3](algorithms.qmd#hj-mode-the-bed-gradient-correction).
