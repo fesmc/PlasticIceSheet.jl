@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Algorithms – PlasticIceSheet.jl</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-6c645bba97489949a6ce198fa08f5136.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">PlasticIceSheet.jl</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="./index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link active" href="./algorithms.html" aria-current="page"> 
+<span class="menu-text">Algorithms</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./usage.html"> 
+<span class="menu-text">Usage</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./PLAN.html"> 
+<span class="menu-text">Design notes</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/fesmc/PlasticIceSheet.jl"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#the-governing-equation" id="toc-the-governing-equation" class="nav-link active" data-scroll-target="#the-governing-equation">1. The governing equation</a></li>
+  <li><a href="#solve-for-h2-not-e" id="toc-solve-for-h2-not-e" class="nav-link" data-scroll-target="#solve-for-h2-not-e">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">E</span></a>
+  <ul class="collapse">
+  <li><a href="#flat-mode" id="toc-flat-mode" class="nav-link" data-scroll-target="#flat-mode"><code>:flat</code> mode</a></li>
+  </ul></li>
+  <li><a href="#hj-mode-the-bed-gradient-correction" id="toc-hj-mode-the-bed-gradient-correction" class="nav-link" data-scroll-target="#hj-mode-the-bed-gradient-correction">3. <code>:hj</code> mode — the bed-gradient correction</a>
+  <ul class="collapse">
+  <li><a href="#damping-is-required" id="toc-damping-is-required" class="nav-link" data-scroll-target="#damping-is-required">Damping is required</a></li>
+  </ul></li>
+  <li><a href="#the-godunov-update" id="toc-the-godunov-update" class="nav-link" data-scroll-target="#the-godunov-update">4. The Godunov update</a></li>
+  <li><a href="#fast-sweeping" id="toc-fast-sweeping" class="nav-link" data-scroll-target="#fast-sweeping">5. Fast sweeping</a></li>
+  <li><a href="#boundary-conditions" id="toc-boundary-conditions" class="nav-link" data-scroll-target="#boundary-conditions">6. Boundary conditions</a></li>
+  <li><a href="#differentiating-with-respect-to-tau" id="toc-differentiating-with-respect-to-tau" class="nav-link" data-scroll-target="#differentiating-with-respect-to-tau">7. Differentiating with respect to <span class="math inline">\tau</span></a>
+  <ul class="collapse">
+  <li><a href="#forward-mode" id="toc-forward-mode" class="nav-link" data-scroll-target="#forward-mode">Forward mode</a></li>
+  <li><a href="#reverse-mode-implicit-differentiation" id="toc-reverse-mode-implicit-differentiation" class="nav-link" data-scroll-target="#reverse-mode-implicit-differentiation">Reverse mode (implicit differentiation)</a></li>
+  </ul></li>
+  <li><a href="#what-was-deliberately-dropped" id="toc-what-was-deliberately-dropped" class="nav-link" data-scroll-target="#what-was-deliberately-dropped">8. What was deliberately dropped</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Algorithms</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>This page explains, end to end, how <code>PlasticIceSheet.jl</code> turns a margin, a bed, and a basal-shear-stress field into an ice sheet — and how it differentiates the result with respect to the shear stress.</p>
+<section id="the-governing-equation" class="level2">
+<h2 class="anchored" data-anchor-id="the-governing-equation">1. The governing equation</h2>
+<p>The reconstruction assumes <strong>perfectly plastic, steady-state</strong> ice: the gravitational driving stress is everywhere balanced by the basal shear stress <span class="math inline">\tau</span>. For an ice surface <span class="math inline">E</span>, bed <span class="math inline">B</span>, and thickness <span class="math inline">H = E - B</span>, this balance is</p>
+<p><span id="eq-plastic"><span class="math display">
+|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H},
+\tag{1}</span></span></p>
+<p>with <span class="math inline">\rho_i</span> the ice density and <span class="math inline">g</span> gravity. The right-hand side is a slope (dimensionless). <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> is a static <strong>Hamilton–Jacobi equation</strong>: the surface is built inward from the margin, where <span class="math inline">H \to 0</span>. Its upwind (viscosity) solution automatically yields the correct envelope wherever ice converges, so ice divides, domes, and merging ice caps appear without any explicit flowline or saddle handling.</p>
+<p>This is the same physics as ICESHEET 1.0, but solved on a grid rather than by tracing characteristics.</p>
+</section>
+<section id="solve-for-h2-not-e" class="level2">
+<h2 class="anchored" data-anchor-id="solve-for-h2-not-e">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">E</span></h2>
+<p>Near the margin <span class="math inline">H \to 0</span>, so the driving slope <span class="math inline">\tau/(\rho_i g H)</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> <strong>diverges</strong>. Discretising <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> for <span class="math inline">E</span> directly is therefore inaccurate near the margin and biases the whole reconstruction thin. The fix is a change of variable.</p>
+<p>On a flat bed, <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> reads <span class="math inline">|\nabla H| = \tau/(\rho_i g H)</span>. Multiplying by <span class="math inline">2H</span> and using <span class="math inline">\nabla(H^2) = 2H\,\nabla H</span>,</p>
+<p><span id="eq-flat"><span class="math display">
+\bigl|\nabla (H^2)\bigr| = \frac{2\tau}{\rho_i\, g}.
+\tag{2}</span></span></p>
+<p>The singularity is gone: <span class="math inline">w \equiv H^2</span> satisfies a <strong>plain eikonal</strong> <span class="math inline">|\nabla w| = G</span> with a finite right-hand side <span class="math inline">G = 2\tau/(\rho_i g)</span>, and the boundary condition <span class="math inline">w = 0</span> at the margin is regular. Both solver modes work in <span class="math inline">w = H^2</span>; the thickness is recovered as <span class="math inline">H = \sqrt{w}</span> and the surface as <span class="math inline">E = H + B</span>.</p>
+<section id="flat-mode" class="level3">
+<h3 class="anchored" data-anchor-id="flat-mode"><code>:flat</code> mode</h3>
+<p><code>:flat</code> solves <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a> exactly and drapes the result on the bed. It is the cheapest mode and is appropriate whenever bed relief is small compared with ice thickness (continental interiors). ICESHEET’s own sensitivity tests indicate the bed-gradient terms are second-order except in mountainous terrain.</p>
+</section>
+</section>
+<section id="hj-mode-the-bed-gradient-correction" class="level2">
+<h2 class="anchored" data-anchor-id="hj-mode-the-bed-gradient-correction">3. <code>:hj</code> mode — the bed-gradient correction</h2>
+<p>Over significant relief the bed slope <span class="math inline">\nabla B</span> enters the flux. Writing <span class="math inline">\nabla E = \nabla H + \nabla B</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> and carrying the algebra through in the <span class="math inline">w = H^2</span> variable gives, <strong>exactly in one dimension</strong>,</p>
+<p><span id="eq-hj"><span class="math display">
+|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla B \cdot \nabla w)\;-\;4\,w\,|\nabla B|^2\,},
+\qquad G = \frac{2\tau}{\rho_i g}.
+\tag{3}</span></span></p>
+<p>Two properties make <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> the right object to solve:</p>
+<ul>
+<li>when <span class="math inline">\nabla B = 0</span> it reduces to the flat eikonal <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>, so <code>:hj</code> and <code>:flat</code> agree exactly on a flat bed;</li>
+<li>it is written in <span class="math inline">w = H^2</span>, so it inherits the regular margin behaviour of <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>.</li>
+</ul>
+<p>The effective right-hand side depends on <span class="math inline">\nabla w</span> (through the <span class="math inline">\nabla B\cdot\nabla w</span> term), so <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> is not a pure eikonal. It is solved by an <strong>outer fixed-point iteration</strong>: freeze the right-hand side from the current <span class="math inline">w</span>, solve the resulting constant-RHS eikonal for a candidate <span class="math inline">w_c</span>, and update.</p>
+<section id="damping-is-required" class="level3">
+<h3 class="anchored" data-anchor-id="damping-is-required">Damping is required</h3>
+<p>The naive update <span class="math inline">w \leftarrow \text{Eikonal}\!\left(\text{RHS}(w)\right)</span> is <strong>not contractive</strong> — over real bed relief it oscillates indefinitely. The solver therefore uses an <strong>under-relaxed (damped) Picard iteration</strong>,</p>
+<p><span class="math display">
+w^{(k+1)} = (1-\alpha)\, w^{(k)} + \alpha\, \text{Eikonal}\!\left(\text{RHS}(w^{(k)})\right),
+</span></p>
+<p>with relaxation factor <span class="math inline">\alpha = \texttt{relax}</span> (default <span class="math inline">0.5</span>). Damping converges the iteration to the same fixed point — i.e.&nbsp;to a vanishing residual (§6) — which is also what makes the implicit-differentiation gradient (§7) exact. Smaller <span class="math inline">\alpha</span> is more robust on steep beds but needs more iterations; beds whose relief approaches the ice thickness over a few cells may not converge at all (lower <code>relax</code>, raise <code>n_outer</code>, refine the grid, or fall back to <code>:flat</code>).</p>
+</section>
+</section>
+<section id="the-godunov-update" class="level2">
+<h2 class="anchored" data-anchor-id="the-godunov-update">4. The Godunov update</h2>
+<p>The eikonal <span class="math inline">|\nabla u| = F</span> is discretised cell-by-cell with the first-order <strong>Godunov upwind scheme</strong>. At a cell with grid spacings <span class="math inline">\Delta x, \Delta y</span>, let <span class="math inline">a</span> and <span class="math inline">b</span> be the smaller of the two neighbour values along each axis:</p>
+<p><span class="math display">
+a = \min(u_{i-1,j},\, u_{i+1,j}), \qquad b = \min(u_{i,j-1},\, u_{i,j+1}).
+</span></p>
+<p>The updated value is the smallest <span class="math inline">u</span> satisfying</p>
+<p><span class="math display">
+\left(\frac{(u-a)_+}{\Delta x}\right)^{2} + \left(\frac{(u-b)_+}{\Delta y}\right)^{2} = F^2,
+\qquad (\cdot)_+ = \max(\cdot, 0).
+</span></p>
+<p>In practice: try the two-sided quadratic; accept it only if the result exceeds both neighbours (both upwind terms active); otherwise take the smaller one-sided update <span class="math inline">\min(a + F\,\Delta x,\; b + F\,\Delta y)</span>. This is <code>godunov_eikonal</code>, a pure function with no mutation or indexing — which is what lets the autodiff back ends differentiate it directly.</p>
+</section>
+<section id="fast-sweeping" class="level2">
+<h2 class="anchored" data-anchor-id="fast-sweeping">5. Fast sweeping</h2>
+<p>The discrete eikonal is solved by the <strong>fast-sweeping method</strong>: Gauss–Seidel updates that keep the monotone minimum,</p>
+<p><span class="math display">
+u_{i,j} \leftarrow \min\!\bigl(u_{i,j},\; \text{Godunov update}\bigr),
+</span></p>
+<p>applied over the four diagonal traversal orderings <span class="math inline">(\nearrow, \nwarrow, \swarrow,
+\searrow)</span> in rotation. Because each ordering captures characteristics flowing in one quadrant of directions, a handful of sweeps converges the whole field in <span class="math inline">O(N)</span> work, for any geometry. Interior cells start at <span class="math inline">+\infty</span>; ice-free cells hold their boundary value (§6) so neighbour look-ups only ever read the working array.</p>
+</section>
+<section id="boundary-conditions" class="level2">
+<h2 class="anchored" data-anchor-id="boundary-conditions">6. Boundary conditions</h2>
+<p>The margin is the interface between mask (grounded ice) and ice-free cells. Ice-free cells carry the Dirichlet value:</p>
+<ul>
+<li><strong>Land margin</strong> (<span class="math inline">B \ge</span> sea level): <span class="math inline">H = 0</span>, i.e.&nbsp;<span class="math inline">w = 0</span>.</li>
+<li><strong>Marine margin</strong> (<span class="math inline">B &lt;</span> sea level): the grounding line sits at the <strong>flotation thickness</strong> — the thickness whose weight balances the local water column, <span class="math display">
+H_{\text{flot}} = \frac{\rho_w}{\rho_i}\,\bigl(\text{sea level} - B\bigr), \qquad w = H_{\text{flot}}^2,
+</span> reproducing ICESHEET’s marine grounding-line treatment. The eikonal then grows the ice inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum surface slope <em>is</em> the plastic constraint the eikonal enforces.</li>
+</ul>
+</section>
+<section id="differentiating-with-respect-to-tau" class="level2">
+<h2 class="anchored" data-anchor-id="differentiating-with-respect-to-tau">7. Differentiating with respect to <span class="math inline">\tau</span></h2>
+<p>Because the solver is a pure function of <span class="math inline">\tau</span>, an objective on the output (a misfit to an observed surface, a target volume, …) is differentiable — enabling <strong>basal-shear-stress inversion</strong>.</p>
+<section id="forward-mode" class="level3">
+<h3 class="anchored" data-anchor-id="forward-mode">Forward mode</h3>
+<p>For a scalar <span class="math inline">\tau</span> or a low-dimensional parameterization, <code>ForwardDiff</code> differentiates straight through <code>solve</code>. Cost scales with the number of parameters.</p>
+</section>
+<section id="reverse-mode-implicit-differentiation" class="level3">
+<h3 class="anchored" data-anchor-id="reverse-mode-implicit-differentiation">Reverse mode (implicit differentiation)</h3>
+<p>For a full per-cell <span class="math inline">\tau</span> field, differentiating through the sweeps would be wasteful. Instead, the converged field satisfies an <strong>optimality condition</strong> — the Godunov residual</p>
+<p><span class="math display">
+r_{i,j}(w, \tau) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
+</span></p>
+<p>on ice cells (and <span class="math inline">w - \text{bc} = 0</span> off-ice). By the implicit function theorem, for a loss <span class="math inline">L(w)</span>,</p>
+<p><span class="math display">
+\frac{\partial L}{\partial \tau}
+= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau},
+</span></p>
+<p>so the gradient costs a single linear solve with the residual Jacobian, <strong>independent of the number of sweeps or outer iterations</strong> and scalable to a full field. The forward fast sweep is treated as a black box; only the residual is differentiated (with <code>ForwardDiff</code> internally). This is wired up with <a href="https://github.com/JuliaDecisionFocusedLearning/ImplicitDifferentiation.jl"><code>ImplicitDifferentiation.jl</code></a> in a package extension, so any reverse-mode AD (e.g.&nbsp;Zygote) obtains the gradient.</p>
+<p>The <code>:flat</code> gradient is exact to machine precision; the <code>:hj</code> gradient is exact once the damped forward solve (§3) has driven the residual to <span class="math inline">\approx 0</span>.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>NaN hygiene
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><span class="math inline">\sqrt{w}</span> has an infinite derivative at <span class="math inline">w=0</span>. Wherever <span class="math inline">\sqrt{w}</span> is differentiated it is floored at <span class="math inline">H_{\min}^2</span>, because the unguarded <span class="math inline">\sqrt{0}</span> derivative produces <span class="math inline">\infty\cdot 0
+= \text{NaN}</span> in the reverse pass (forward mode dodges this by branch selection).</p>
+</div>
+</div>
+</section>
+</section>
+<section id="what-was-deliberately-dropped" class="level2">
+<h2 class="anchored" data-anchor-id="what-was-deliberately-dropped">8. What was deliberately dropped</h2>
+<p>Relative to ICESHEET 1.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline. See the <a href="./PLAN.html">Design notes</a> for the full accounting.</p>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/fesmc\.github\.io\/PlasticIceSheet\.jl\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
