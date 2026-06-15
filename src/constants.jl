@@ -1,7 +1,7 @@
 # Physical parameters for the perfectly-plastic ice-sheet reconstruction.
 #
 # These are held as plain (non-differentiated) scalars: the AD target is the basal
-# shear stress field `τ`, not these constants. Defaults match ICESHEET 1.0
+# shear stress field `τ`, not these constants. Defaults match ICESHEET
 # (Gowan et al. 2016, global_parameters.f90).
 
 """

@@ -15,6 +15,11 @@ as a *complementary first-guess tool* next to a full dynamic model (e.g. Yelmo) 
 independent GIA/sea-level solver: to seed spin-up, force an SMB model, or serve as a
 relaxation target.
 
+It is a clean-room simplification and modernization of **ICESHEET 2.0** by Evan Gowan and
+colleagues — [source code](https://github.com/evangowan/icesheet), the method's
+description paper ([Gowan et al., 2016, *Geosci. Model Dev.*](https://doi.org/10.5194/gmd-9-1673-2016)),
+and its global application ([Gowan et al., 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)).
+
 The physics is the single plastic-surface equation
 
 ```
@@ -25,10 +30,8 @@ solved as a static Hamilton–Jacobi (eikonal) problem with **fast sweeping**. S
 domes, and coalescing ice caps emerge automatically from the upwind viscosity solution
 — no flowline tracing, crossover detection, or saddle bookkeeping.
 
-This is a clean-room simplification/modernization of **ICESHEET 1.0**
-([Gowan et al. 2016, GMD](https://doi.org/10.5194/gmd-9-1673-2016);
-[code](https://github.com/evangowan/icesheet)). See [`docs/PLAN.md`](docs/PLAN.md) for
-the full rationale of what was kept, simplified, and dropped.
+See [`docs/PLAN.md`](docs/PLAN.md) for the full rationale of what was kept, simplified, and
+dropped relative to ICESHEET.
 
 ## Usage
 

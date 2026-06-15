@@ -22,7 +22,7 @@ built inward from the margin, where $H \to 0$. Its upwind (viscosity) solution
 automatically yields the correct envelope wherever ice converges, so ice divides, domes,
 and merging ice caps appear without any explicit flowline or saddle handling.
 
-This is the same physics as ICESHEET 1.0, but solved on a grid rather than by tracing
+This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing
 characteristics.
 
 ## 2. Solve for $H^2$, not $E$
@@ -189,7 +189,7 @@ floored at $H_{\min}^2$, because the unguarded $\sqrt{0}$ derivative produces $\
 
 ## 8. What was deliberately dropped
 
-Relative to ICESHEET 1.0, the grid Hamilton–Jacobi solver makes the following machinery
+Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery
 unnecessary: method-of-characteristics flowline tracing, crossover detection (the
 motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level
 iteration loop, and the GMT projection/preprocessing pipeline. See the

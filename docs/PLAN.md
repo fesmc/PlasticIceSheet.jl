@@ -12,7 +12,7 @@ a dynamic model and carries no transient, thermomechanics, or ice-shelf physics.
 
 ## Origin
 
-This package is a deliberate simplification and modernization of **ICESHEET 1.0** by
+This package is a deliberate simplification and modernization of **ICESHEET 2.0** by
 Evan J. Gowan et al.:
 
 - Source code (Fortran): <https://github.com/evangowan/icesheet>
@@ -26,8 +26,8 @@ Evan J. Gowan et al.:
   <https://doi.org/10.1038/s41467-021-21469-w>
 
 ICESHEET is GPL-3.0. This is a clean-room reimplementation of the *physics* (one
-published equation, below); none of the Fortran source is copied. License choice for
-this package is TBD (see Open questions).
+published equation, below); none of the Fortran source is copied. This package is
+**MIT-licensed**.
 
 ## The physics we keep
 
@@ -126,7 +126,7 @@ Given the intended use (first guess; external GIA; Yelmo for dynamics), we drop:
 - **AD backend & strategy** (forward-through-solver vs. implicit/adjoint at the fixed
   point; Enzyme vs. ForwardDiff vs. Zygote) — depends on whether `τ` is a full per-cell
   field or a low-dimensional parameterization. *To be decided before the core lands.*
-- License (ICESHEET is GPL-3.0; this is a clean-room physics reimplementation).
+- ~~License~~ — decided: MIT (clean-room physics reimplementation; ICESHEET is GPL-3.0).
 - NetCDF I/O as a package extension (`ext/`).
 
 ## Implementation notes (v0.1)

@@ -8,6 +8,16 @@ inputs — a grounded-ice **margin/mask**, a **bed topography** $B$, and a **bas
 stress** field $\tau$ — and returns a glaciologically plausible ice **surface** $E$ and
 **thickness** $H$. There is no time-stepping, no climate, and no ice dynamics.
 
+It is a clean-room simplification and modernization of **ICESHEET 2.0** by Evan Gowan and
+colleagues — [source code](https://github.com/evangowan/icesheet), the method's
+description paper
+([Gowan et al., 2016, *Geosci. Model Dev.*](https://doi.org/10.5194/gmd-9-1673-2016)),
+and its global application to the past 80,000 years
+([Gowan et al., 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)).
+The core physics — a single published equation — is retained, while ICESHEET's recursive
+flowline / crossover / saddle machinery is replaced by a grid eikonal solver (see
+[Origin](#origin)).
+
 It is meant as a *complementary first-guess tool* next to a full dynamic model (e.g.
 [Yelmo](https://github.com/palma-ice/yelmo)) and an independent GIA / sea-level solver: to
 seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.
@@ -45,11 +55,13 @@ $\tau$ is differentiable, enabling gradient-based [inversion](usage.qmd#invertin
 
 ## Origin
 
-This is a clean-room simplification and modernization of **ICESHEET 1.0**
+This is a clean-room simplification and modernization of
+**[ICESHEET 2.0](https://github.com/evangowan/icesheet)**
 ([Gowan et al. 2016, *GMD*](https://doi.org/10.5194/gmd-9-1673-2016);
-[source](https://github.com/evangowan/icesheet)). The core physics — one published
-equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery
-is replaced by a grid eikonal solver on the order of a couple hundred lines. The
-[Design notes](PLAN.md) record what was kept, simplified, and dropped, and why.
+[Gowan et al. 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)). The core
+physics — one published equation — is retained; the ~2,600-line recursive flowline /
+crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple
+hundred lines. The [Design notes](PLAN.md) record what was kept, simplified, and dropped,
+and why.
 
 `PlasticIceSheet.jl` is MIT-licensed.
