@@ -2,7 +2,7 @@
 
 A small, AD-friendly Julia package that reconstructs a perfectly-plastic, steady-state
 ice-sheet surface from three inputs — a **grounded-ice margin/mask**, a **basal shear
-stress field** `τ(x,y)`, and a **bed topography** `B(x,y)` — by solving the governing
+stress field** `τ(x,y)`, and a **bed elevation** `z_b(x,y)` — by solving the governing
 equation as a static Hamilton–Jacobi (eikonal-type) problem on a grid.
 
 It is intended as a *complementary first-guess tool* alongside a full dynamic model
@@ -36,13 +36,13 @@ steady-state ice surface, where driving stress balances basal shear stress every
 (paper Eq. 5):
 
 ```
-|∇E| = τ / (ρ_i g (E − B)) = τ / (ρ_i g H),    H = E − B ≥ 0
+|∇z_s| = τ / (ρ_i g (z_s − z_b)) = τ / (ρ_i g H),    H = z_s − z_b ≥ 0
 ```
 
-with `E` the ice surface elevation, `B` the bed, `H` the thickness, `τ` the basal shear
-stress, `ρ_i` ice density, `g` gravity. Boundary condition: `H = 0` (`E = B`) at the
-margin, plus a marine flotation thickness `H = −B(1 − ρ_w/ρ_i)` where the grounded
-margin sits below sea level.
+with `z_s` the ice surface elevation, `z_b` the bed elevation, `H` the thickness, `τ` the
+basal shear stress, `ρ_i` ice density, `g` gravity. Boundary condition: `H = 0`
+(`z_s = z_b`) at the margin, plus a marine flotation thickness
+`H_flt = (ρ_w/ρ_i)(z_ss − z_b)` where the grounded margin sits below sea level `z_ss`.
 
 This is a **static Hamilton–Jacobi equation**. The viscosity solution of an upwind grid
 scheme automatically produces the correct surface where flow would converge — so
@@ -51,25 +51,27 @@ scheme automatically produces the correct surface where flow would converge — 
 ### Two solve modes
 
 1. **`:flat` — flat-bed eikonal (simple case).** Neglect bed slope in the flux
-   (`|∇E| ≈ |∇H|`). Substituting `u = H²` gives a textbook eikonal:
+   (`|∇z_s| ≈ |∇H|`). Substituting `u = H²` gives a textbook eikonal:
 
    ```
    |∇u| = 2τ / (ρ_i g),     u = 0 at the margin
    ```
 
-   Solve, then `H = √u`, `E = H + B`. Exact eikonal; ideal when bed relief ≪ ice
+   Solve, then `H = √u`, `z_s = H + z_b`. Exact eikonal; ideal when bed relief ≪ ice
    thickness (continental interiors). The paper's own sensitivity tests indicate the
    bed-gradient terms are second-order except in mountainous terrain.
 
-2. **`:hj` — full Hamilton–Jacobi (default).** Solve directly for `E`:
+2. **`:hj` — full Hamilton–Jacobi (default).** Accounts for the bed slope `∇z_b`. The
+   effective right-hand side (in the `w = H²` variable) is
 
    ```
-   |∇E| = τ / (ρ_i g (E − B))
+   |∇w| = √(G² − 4√w(∇z_b·∇w) − 4w|∇z_b|²),    G = 2τ / (ρ_i g)
    ```
 
-   The right-hand side depends on `E` at the node (`f = f(x, E)`, monotone decreasing
-   in `E`), so each Godunov node update is a local nonlinear solve (a few inner
-   iterations / local Newton). Correct over arbitrary bed relief.
+   which depends on `w` through `∇w`. The frozen right-hand side is re-solved as a
+   constant-RHS eikonal and iterated to a fixed point (see Implementation notes — a
+   **damped** Picard iteration is required, as the undamped map oscillates). Correct over
+   arbitrary bed relief; reduces exactly to `:flat` when `∇z_b = 0`.
 
 ### Numerics
 
@@ -79,7 +81,7 @@ scheme automatically produces the correct surface where flow would converge — 
 - Godunov update at node `(i,j)` with spacing `h`, neighbor minima `a, b`:
   - if `|a − b| ≥ F h`: `u = min(a, b) + F h`
   - else: `u = (a + b + √(2 F² h² − (a − b)²)) / 2`
-  where `F = 2τ/(ρ_i g)` (flat mode) or the `E`-dependent local solve (HJ mode).
+  where `F = G = 2τ/(ρ_i g)` (flat mode) or the `w`-dependent effective RHS above (`:hj`).
 
 This replaces the ~2,600-line recursive flowline/crossover/saddle machinery of ICESHEET
 (`find_flowline_fisher_adaptive_4.f90`) with a kernel on the order of ~150–250 lines.
@@ -92,7 +94,7 @@ Given the intended use (first guess; external GIA; Yelmo for dynamics), we drop:
   detection / motorcycle-graph algorithm, saddle & dome detection, polygon splitting,
   recursion, adaptive contour resampling. Subsumed by the grid HJ solver.
 - **The GIA / sea-level iteration loop** (CALSEA/SELEN coupling, `global/deform/`,
-  `selen_format.sh`, …). The package consumes a bed `B`; the user owns GIA.
+  `selen_format.sh`, …). The package consumes a bed `z_b`; the user owns GIA.
 - **The GMT projection/preprocessing pipeline** (`run.sh`, `prepare_icesheet.sh`,
   `create_ss_grid.f90`, shapefile→τ domains, `reduce_dem`, `nearest_int`, `bicubic`,
   `diff_map`) and the hand-rolled GMT binary-record grid reader (`grids.f90`). Replaced
@@ -104,10 +106,10 @@ Given the intended use (first guess; external GIA; Yelmo for dynamics), we drop:
 
 ## What we keep / add
 
-- Inputs: grounded-ice mask, bed `B`, shear-stress field `τ` (or a constant / a
+- Inputs: grounded-ice mask, bed `z_b`, shear-stress field `τ` (or a constant / a
   low-dimensional parameterization).
 - Plastic physics + marine flotation BC at the grounding line.
-- Gridded outputs: surface `E`, thickness `H`, plus reductions (volume, area).
+- Gridded outputs: surface `z_s`, thickness `H`, plus reductions (volume, area).
 - **AD-friendliness**: the solver is written so that a scalar loss on the output
   (e.g. misfit to a target surface, or to Yelmo) can be differentiated w.r.t. `τ`,
   enabling gradient-based inversion of basal shear stress — the modern replacement for
@@ -131,10 +133,10 @@ Given the intended use (first guess; external GIA; Yelmo for dynamics), we drop:
 
 ## Implementation notes (v0.1)
 
-- **Both modes solve for `w = H²`**, not the surface `E` directly: the driving slope
-  `τ/(ρ_i g H)` blows up at the margin (`H→0`) and biases a direct-`E` solve low. `:flat`
+- **Both modes solve for `w = H²`**, not the surface `z_s` directly: the driving slope
+  `τ/(ρ_i g H)` blows up at the margin (`H→0`) and biases a direct-`z_s` solve low. `:flat`
   is the plain eikonal `|∇w| = 2τ/(ρ_i g)`; `:hj` adds the bed-gradient correction.
-- **`:hj` damping.** The `:hj` effective RHS `√(G² − 4√w(∇B·∇w) − 4w|∇B|²)` carries `∇w`,
+- **`:hj` damping.** The `:hj` effective RHS `√(G² − 4√w(∇z_b·∇w) − 4w|∇z_b|²)` carries `∇w`,
   so "freeze RHS, re-solve" is not contractive — undamped it oscillates over real relief.
   It is solved by a **damped (under-relaxed) Picard iteration** (`relax`, default 0.5).
   Very steep beds (relief ≈ ice thickness over a few cells) may still not converge.

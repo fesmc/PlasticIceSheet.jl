@@ -16,17 +16,17 @@ Grounded-ice area (m²).
 ice_area(mask, dx, dy) = count(mask) * dx * dy
 
 """
-    surface_misfit(E, E_obs, mask)
+    surface_misfit(z_s, z_s_obs, mask)
 
 Mean-squared surface-elevation misfit over grounded-ice cells — a basic objective for
 inverting `τ` against a target surface (e.g. observed topography or a Yelmo field).
 """
-function surface_misfit(E, E_obs, mask)
-    s = zero(eltype(E))
+function surface_misfit(z_s, z_s_obs, mask)
+    s = zero(eltype(z_s))
     n = 0
-    @inbounds for k in eachindex(E)
+    @inbounds for k in eachindex(z_s)
         if mask[k]
-            d = E[k] - E_obs[k]
+            d = z_s[k] - z_s_obs[k]
             s += d * d
             n += 1
         end

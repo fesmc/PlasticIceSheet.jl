@@ -17,12 +17,12 @@ I/O are loaded on demand through package extensions (below).
 ```julia
 using PlasticIceSheet
 
-E, H = solve(bed, τ, mask; dx, dy, mode = :hj)
+z_s, H = solve(z_b, τ, mask; dx, dy, mode = :hj)
 ```
 
 | argument | meaning |
 |---|---|
-| `bed`  | bed elevation $B$ (m), `nx × ny` matrix |
+| `z_b`  | bed elevation $z_b$ (m), `nx × ny` matrix |
 | `τ`    | basal shear stress (Pa); a scalar is broadcast to a uniform field |
 | `mask` | `true` where grounded ice exists; the margin is the mask boundary |
 | `dx`, `dy` | grid spacings (m) |
@@ -31,18 +31,20 @@ Key options (see the docstring for the rest):
 
 - `mode` — `:hj` (default, full Hamilton–Jacobi over arbitrary relief) or `:flat`
   (flat-bed eikonal, cheapest; exact when relief ≪ thickness).
-- `params` — a `PlasticParams` (densities, gravity, sea level, `H_min`).
+- `params` — a `PlasticParams` (densities `ρ_i`/`ρ_w`, gravity `g`, sea level `z_ss`,
+  `H_min`).
 - `n_outer`, `outer_tol`, `relax` — `:hj` damped fixed-point controls. `relax` ∈ (0,1] is
   the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.
 
-Returns `(E, H)`; ice-free cells have `H = 0`, `E = bed`.
+Returns `(z_s, H)` — surface elevation $z_s$ and thickness $H$; ice-free cells have
+`H = 0`, `z_s = z_b`.
 
 ### Diagnostics
 
 ```julia
-ice_volume(H, dx, dy)            # m³
-ice_area(mask, dx, dy)           # m²
-surface_misfit(E, E_obs, mask)   # mean-squared surface misfit over ice
+ice_volume(H, dx, dy)                # m³
+ice_area(mask, dx, dy)               # m²
+surface_misfit(z_s, z_s_obs, mask)   # mean-squared surface misfit over ice
 ```
 
 ## Inverting for $\tau$
@@ -54,7 +56,7 @@ for the theory.
 
 ```julia
 using ForwardDiff
-loss(τ) = surface_misfit(first(solve(bed, τ, mask; dx, dy)), E_obs, mask)
+loss(τ) = surface_misfit(first(solve(z_b, τ, mask; dx, dy)), z_s_obs, mask)
 g = ForwardDiff.derivative(loss, 1.0e5)
 ```
 
@@ -66,7 +68,7 @@ reverse-mode AD:
 ```julia
 using ImplicitDifferentiation, ADTypes, ForwardDiff, Zygote
 
-loss(τ) = surface_misfit(differentiable_thickness(τ, bed, mask; dx, dy) .+ bed, E_obs, mask)
+loss(τ) = surface_misfit(differentiable_thickness(τ, z_b, mask; dx, dy) .+ z_b, z_s_obs, mask)
 g = Zygote.gradient(loss, τ)[1]      # gradient w.r.t. the whole τ field
 ```
 
@@ -86,9 +88,9 @@ fields, pass an iterative solver — see the `differentiable_thickness` docstrin
 ```julia
 using NCDatasets
 
-inp = load_plastic_inputs("inputs.nc")             # (; bed, τ, mask, dx, dy, x, y)
-E, H = solve(inp.bed, inp.τ, inp.mask; inp.dx, inp.dy)
-save_reconstruction("out.nc", E, H; x = inp.x, y = inp.y)
+inp = load_plastic_inputs("inputs.nc")             # (; z_b, τ, mask, dx, dy, x, y)
+z_s, H = solve(inp.z_b, inp.τ, inp.mask; inp.dx, inp.dy)
+save_reconstruction("out.nc", z_s, H; x = inp.x, y = inp.y)
 ```
 
 ## Caveats

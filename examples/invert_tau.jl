@@ -13,20 +13,20 @@ using Zygote
 # --- synthetic truth --------------------------------------------------------------
 nx, ny = 40, 40
 dx = dy = 2000.0
-bed = [150.0 * sin(i / 11) * cos(j / 13) for i in 1:nx, j in 1:ny]   # gentle relief
+z_b = [150.0 * sin(i / 11) * cos(j / 13) for i in 1:nx, j in 1:ny]   # bed, gentle relief
 mask = [hypot(i - 20.5, j - 20.5) <= 16 for i in 1:nx, j in 1:ny]
 
 # A "true" τ field: higher in one half, lower in the other (kPa → Pa).
 τ_true = [60.0e3 + 80.0e3 * (i > nx ÷ 2) for i in 1:nx, j in 1:ny]
 
 solver = (; dx, dy, mode = :flat, max_sweeps = 400, tol = 1e-10)
-_, H_obs = solve(bed, τ_true, mask; solver...)
+_, H_obs = solve(z_b, τ_true, mask; solver...)
 
 # --- inversion --------------------------------------------------------------------
 # Objective: mean-squared surface misfit over grounded ice.
 function loss(τ)
-    H = differentiable_thickness(τ, bed, mask; solver...)
-    return surface_misfit(H .+ bed, H_obs .+ bed, mask)
+    H = differentiable_thickness(τ, z_b, mask; solver...)
+    return surface_misfit(H .+ z_b, H_obs .+ z_b, mask)
 end
 
 # Adam normalizes by the running gradient magnitude, so the step `lr` is in τ-units

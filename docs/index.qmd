@@ -24,11 +24,11 @@ seed a spin-up, force a surface-mass-balance model, or serve as a relaxation tar
 
 ## The idea in one equation
 
-The ice surface satisfies the perfectly-plastic balance — driving stress equals basal
-shear stress everywhere:
+The ice surface elevation $z_s$ over a bed $z_b$, with thickness $H = z_s - z_b$, satisfies
+the perfectly-plastic balance — driving stress equals basal shear stress $\tau$ everywhere:
 
 $$
-|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = E - B .
+|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = z_s - z_b .
 $$
 
 This is a static **Hamilton–Jacobi (eikonal) equation**. Solving it with an upwind grid

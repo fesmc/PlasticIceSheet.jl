@@ -6,14 +6,30 @@ This page explains, end to end, how `PlasticIceSheet.jl` turns a margin, a bed, 
 basal-shear-stress field into an ice sheet — and how it differentiates the result with
 respect to the shear stress.
 
+## Notation
+
+| symbol | code | meaning |
+|---|---|---|
+| $z_s$ | `z_s` | ice **surface** elevation (m) |
+| $z_b$ | `z_b` | **bed** elevation (m) |
+| $H = z_s - z_b$ | `H` | ice **thickness** (m) |
+| $\tau$ | `τ` | basal **shear stress** (Pa) |
+| $z_{ss}$ | `z_ss` | sea-surface elevation, i.e. sea level (m) |
+| $H_{flt}$ | — | marine **flotation** thickness (m) |
+| $\rho_i,\ \rho_w$ | `ρ_i, ρ_w` | ice / sea-water density (kg m⁻³) |
+| $g$ | `g` | gravitational acceleration (m s⁻²) |
+| $w \equiv H^2$ | `w` | the solver's working variable (m²) |
+| $G \equiv 2\tau/(\rho_i g)$ | — | flat-bed eikonal right-hand side (m) |
+
 ## 1. The governing equation
 
 The reconstruction assumes **perfectly plastic, steady-state** ice: the gravitational
 driving stress is everywhere balanced by the basal shear stress $\tau$. For an ice
-surface $E$, bed $B$, and thickness $H = E - B$, this balance is
+surface elevation $z_s$, bed elevation $z_b$, and thickness $H = z_s - z_b$, this balance
+is
 
 $$
-|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H},
+|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H},
 $$ {#eq-plastic}
 
 with $\rho_i$ the ice density and $g$ gravity. The right-hand side is a slope
@@ -25,10 +41,10 @@ and merging ice caps appear without any explicit flowline or saddle handling.
 This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing
 characteristics.
 
-## 2. Solve for $H^2$, not $E$
+## 2. Solve for $H^2$, not $z_s$
 
 Near the margin $H \to 0$, so the driving slope $\tau/(\rho_i g H)$ in @eq-plastic
-**diverges**. Discretising @eq-plastic for $E$ directly is therefore inaccurate near the
+**diverges**. Discretising @eq-plastic for $z_s$ directly is therefore inaccurate near the
 margin and biases the whole reconstruction thin. The fix is a change of variable.
 
 On a flat bed, @eq-plastic reads $|\nabla H| = \tau/(\rho_i g H)$. Multiplying by $2H$ and
@@ -38,10 +54,10 @@ $$
 \bigl|\nabla (H^2)\bigr| = \frac{2\tau}{\rho_i\, g}.
 $$ {#eq-flat}
 
-The singularity is gone: $w \equiv H^2$ satisfies a **plain eikonal** $|\nabla w| = G$ with
-a finite right-hand side $G = 2\tau/(\rho_i g)$, and the boundary condition $w = 0$ at the
-margin is regular. Both solver modes work in $w = H^2$; the thickness is recovered as
-$H = \sqrt{w}$ and the surface as $E = H + B$.
+The singularity is gone: the working variable $w \equiv H^2$ satisfies a **plain eikonal**
+$|\nabla w| = G$ with a finite right-hand side $G = 2\tau/(\rho_i g)$, and the boundary
+condition $w = 0$ at the margin is regular. Both solver modes work in $w = H^2$; the
+thickness is recovered as $H = \sqrt{w}$ and the surface as $z_s = H + z_b$.
 
 ### `:flat` mode
 
@@ -52,22 +68,22 @@ second-order except in mountainous terrain.
 
 ## 3. `:hj` mode — the bed-gradient correction
 
-Over significant relief the bed slope $\nabla B$ enters the flux. Writing
-$\nabla E = \nabla H + \nabla B$ in @eq-plastic and carrying the algebra through in the
+Over significant relief the bed slope $\nabla z_b$ enters the flux. Writing
+$\nabla z_s = \nabla H + \nabla z_b$ in @eq-plastic and carrying the algebra through in the
 $w = H^2$ variable gives, **exactly in one dimension**,
 
 $$
-|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla B \cdot \nabla w)\;-\;4\,w\,|\nabla B|^2\,},
+|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla z_b \cdot \nabla w)\;-\;4\,w\,|\nabla z_b|^2\,},
 \qquad G = \frac{2\tau}{\rho_i g}.
 $$ {#eq-hj}
 
 Two properties make @eq-hj the right object to solve:
 
-- when $\nabla B = 0$ it reduces to the flat eikonal @eq-flat, so `:hj` and `:flat` agree
+- when $\nabla z_b = 0$ it reduces to the flat eikonal @eq-flat, so `:hj` and `:flat` agree
   exactly on a flat bed;
 - it is written in $w = H^2$, so it inherits the regular margin behaviour of @eq-flat.
 
-The effective right-hand side depends on $\nabla w$ (through the $\nabla B\cdot\nabla w$
+The effective right-hand side depends on $\nabla w$ (through the $\nabla z_b\cdot\nabla w$
 term), so @eq-hj is not a pure eikonal. It is solved by an **outer fixed-point iteration**:
 freeze the right-hand side from the current $w$, solve the resulting constant-RHS eikonal
 for a candidate $w_c$, and update.
@@ -132,11 +148,12 @@ any geometry. Interior cells start at $+\infty$; ice-free cells hold their bound
 The margin is the interface between mask (grounded ice) and ice-free cells. Ice-free cells
 carry the Dirichlet value:
 
-- **Land margin** ($B \ge$ sea level): $H = 0$, i.e. $w = 0$.
-- **Marine margin** ($B <$ sea level): the grounding line sits at the **flotation
-  thickness** — the thickness whose weight balances the local water column,
+- **Land margin** ($z_b \ge z_{ss}$): $H = 0$, i.e. $w = 0$.
+- **Marine margin** ($z_b < z_{ss}$, with $z_{ss}$ the sea-surface elevation): the
+  grounding line sits at the **flotation thickness** $H_{flt}$ — the thickness whose weight
+  balances the local water column,
   $$
-  H_{\text{flot}} = \frac{\rho_w}{\rho_i}\,\bigl(\text{sea level} - B\bigr), \qquad w = H_{\text{flot}}^2,
+  H_{flt} = \frac{\rho_w}{\rho_i}\,\bigl(z_{ss} - z_b\bigr), \qquad w = H_{flt}^2,
   $$
   reproducing ICESHEET's marine grounding-line treatment. The eikonal then grows the ice
   inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum

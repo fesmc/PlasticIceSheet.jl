@@ -16,15 +16,15 @@ using ADTypes: AutoForwardDiff
 import ForwardDiff  # provides the backend used to differentiate the conditions
 
 """
-    differentiable_thickness(τ, bed, mask; dx, dy, mode=:hj, params=PlasticParams(),
+    differentiable_thickness(τ, z_b, mask; dx, dy, mode=:hj, params=PlasticParams(),
                              max_sweeps, tol, n_outer, outer_tol,
                              representation=MatrixRepresentation(),
                              linear_solver=DirectLinearSolver())
 
 Reverse-mode-differentiable ice thickness `H` as a function of a full per-cell basal
-shear stress field `τ`, via implicit differentiation of the converged Godunov fixed
-point. Use as the inner solve of a basal-shear-stress inversion; differentiate a scalar
-objective of `H` with any reverse-mode AD (e.g. Zygote).
+shear stress field `τ` (with bed elevation `z_b`), via implicit differentiation of the
+converged Godunov fixed point. Use as the inner solve of a basal-shear-stress inversion;
+differentiate a scalar objective of `H` with any reverse-mode AD (e.g. Zygote).
 
 The default linear solver forms the (sparse-ish) Jacobian explicitly and solves it
 directly — robust and exact for the modest grids this first-guess tool targets. For very
@@ -33,7 +33,7 @@ large grids pass `representation=OperatorRepresentation()` and
 the eikonal adjoint's characteristics span the domain).
 """
 function PlasticIceSheet.differentiable_thickness(
-        τ::AbstractMatrix, bed::AbstractMatrix, mask::AbstractMatrix{Bool};
+        τ::AbstractMatrix, z_b::AbstractMatrix, mask::AbstractMatrix{Bool};
         dx::Real, dy::Real, mode::Symbol = :hj,
         params::PlasticParams = PlasticParams(),
         max_sweeps::Int = 200, tol = 1e-6, n_outer::Int = 200, outer_tol = 1e-5,
@@ -41,15 +41,15 @@ function PlasticIceSheet.differentiable_thickness(
         representation = MatrixRepresentation(),
         linear_solver = DirectLinearSolver())
 
-    size(bed) == size(mask) == size(τ) ||
-        throw(DimensionMismatch("τ, bed and mask must share the same shape"))
+    size(z_b) == size(mask) == size(τ) ||
+        throw(DimensionMismatch("τ, z_b and mask must share the same shape"))
 
-    bc = _bc_flat.(bed, Ref(params))
-    shape = size(bed)
+    bc = _bc_flat.(z_b, Ref(params))
+    shape = size(z_b)
     # Constant (non-differentiated) context carried alongside the differentiated `τ`.
     # `:hj` needs a tightly-converged forward solve (small residual) for the implicit
     # gradient to be exact, hence the firmer n_outer / outer_tol defaults here.
-    ctx = (; bed, mask, bc, dx, dy, params, mode, shape,
+    ctx = (; z_b, mask, bc, dx, dy, params, mode, shape,
            max_sweeps, tol, n_outer, outer_tol, relax)
 
     # The implicit output `y` and the residual are kept as flat vectors so the Jacobian
@@ -57,7 +57,7 @@ function PlasticIceSheet.differentiable_thickness(
 
     # solver(x, args...) -> (y, z): forward solve for w = H² (byproduct z unused).
     solver = function (x, c)
-        w = _solve_w(x, c.bed, c.mask, c.bc, c.dx, c.dy, c.params, c.mode;
+        w = _solve_w(x, c.z_b, c.mask, c.bc, c.dx, c.dy, c.params, c.mode;
                      max_sweeps = c.max_sweeps, tol = c.tol,
                      n_outer = c.n_outer, outer_tol = c.outer_tol, relax = c.relax)
         return vec(w), nothing
@@ -65,7 +65,7 @@ function PlasticIceSheet.differentiable_thickness(
 
     # conditions(x, y, z, args...) -> c: the residual that vanishes at the solution.
     conditions = function (x, y, _z, c)
-        r = godunov_residual(reshape(y, c.shape), x, c.bed, c.mask, c.bc,
+        r = godunov_residual(reshape(y, c.shape), x, c.z_b, c.mask, c.bc,
                              c.dx, c.dy, c.params, c.mode)
         return vec(r)
     end
