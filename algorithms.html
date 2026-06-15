@@ -173,8 +173,9 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#the-governing-equation" id="toc-the-governing-equation" class="nav-link active" data-scroll-target="#the-governing-equation">1. The governing equation</a></li>
-  <li><a href="#solve-for-h2-not-e" id="toc-solve-for-h2-not-e" class="nav-link" data-scroll-target="#solve-for-h2-not-e">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">E</span></a>
+  <li><a href="#notation" id="toc-notation" class="nav-link active" data-scroll-target="#notation">Notation</a></li>
+  <li><a href="#the-governing-equation" id="toc-the-governing-equation" class="nav-link" data-scroll-target="#the-governing-equation">1. The governing equation</a></li>
+  <li><a href="#solve-for-h2-not-z_s" id="toc-solve-for-h2-not-z_s" class="nav-link" data-scroll-target="#solve-for-h2-not-z_s">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">z_s</span></a>
   <ul class="collapse">
   <li><a href="#flat-mode" id="toc-flat-mode" class="nav-link" data-scroll-target="#flat-mode"><code>:flat</code> mode</a></li>
   </ul></li>
@@ -217,23 +218,92 @@ window.Quarto = {
 
 
 <p>This page explains, end to end, how <code>PlasticIceSheet.jl</code> turns a margin, a bed, and a basal-shear-stress field into an ice sheet — and how it differentiates the result with respect to the shear stress.</p>
+<section id="notation" class="level2">
+<h2 class="anchored" data-anchor-id="notation">Notation</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>symbol</th>
+<th>code</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">z_s</span></td>
+<td><code>z_s</code></td>
+<td>ice <strong>surface</strong> elevation (m)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">z_b</span></td>
+<td><code>z_b</code></td>
+<td><strong>bed</strong> elevation (m)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">H = z_s - z_b</span></td>
+<td><code>H</code></td>
+<td>ice <strong>thickness</strong> (m)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\tau</span></td>
+<td><code>τ</code></td>
+<td>basal <strong>shear stress</strong> (Pa)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">z_{ss}</span></td>
+<td><code>z_ss</code></td>
+<td>sea-surface elevation, i.e.&nbsp;sea level (m)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">H_{flt}</span></td>
+<td>—</td>
+<td>marine <strong>flotation</strong> thickness (m)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\rho_i,\ \rho_w</span></td>
+<td><code>ρ_i, ρ_w</code></td>
+<td>ice / sea-water density (kg m⁻³)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">g</span></td>
+<td><code>g</code></td>
+<td>gravitational acceleration (m s⁻²)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">w \equiv H^2</span></td>
+<td><code>w</code></td>
+<td>the solver’s working variable (m²)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">G \equiv 2\tau/(\rho_i g)</span></td>
+<td>—</td>
+<td>flat-bed eikonal right-hand side (m)</td>
+</tr>
+</tbody>
+</table>
+</section>
 <section id="the-governing-equation" class="level2">
 <h2 class="anchored" data-anchor-id="the-governing-equation">1. The governing equation</h2>
-<p>The reconstruction assumes <strong>perfectly plastic, steady-state</strong> ice: the gravitational driving stress is everywhere balanced by the basal shear stress <span class="math inline">\tau</span>. For an ice surface <span class="math inline">E</span>, bed <span class="math inline">B</span>, and thickness <span class="math inline">H = E - B</span>, this balance is</p>
+<p>The reconstruction assumes <strong>perfectly plastic, steady-state</strong> ice: the gravitational driving stress is everywhere balanced by the basal shear stress <span class="math inline">\tau</span>. For an ice surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>, this balance is</p>
 <p><span id="eq-plastic"><span class="math display">
-|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H},
+|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H},
 \tag{1}</span></span></p>
 <p>with <span class="math inline">\rho_i</span> the ice density and <span class="math inline">g</span> gravity. The right-hand side is a slope (dimensionless). <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> is a static <strong>Hamilton–Jacobi equation</strong>: the surface is built inward from the margin, where <span class="math inline">H \to 0</span>. Its upwind (viscosity) solution automatically yields the correct envelope wherever ice converges, so ice divides, domes, and merging ice caps appear without any explicit flowline or saddle handling.</p>
 <p>This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing characteristics.</p>
 </section>
-<section id="solve-for-h2-not-e" class="level2">
-<h2 class="anchored" data-anchor-id="solve-for-h2-not-e">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">E</span></h2>
-<p>Near the margin <span class="math inline">H \to 0</span>, so the driving slope <span class="math inline">\tau/(\rho_i g H)</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> <strong>diverges</strong>. Discretising <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> for <span class="math inline">E</span> directly is therefore inaccurate near the margin and biases the whole reconstruction thin. The fix is a change of variable.</p>
+<section id="solve-for-h2-not-z_s" class="level2">
+<h2 class="anchored" data-anchor-id="solve-for-h2-not-z_s">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">z_s</span></h2>
+<p>Near the margin <span class="math inline">H \to 0</span>, so the driving slope <span class="math inline">\tau/(\rho_i g H)</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> <strong>diverges</strong>. Discretising <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> for <span class="math inline">z_s</span> directly is therefore inaccurate near the margin and biases the whole reconstruction thin. The fix is a change of variable.</p>
 <p>On a flat bed, <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> reads <span class="math inline">|\nabla H| = \tau/(\rho_i g H)</span>. Multiplying by <span class="math inline">2H</span> and using <span class="math inline">\nabla(H^2) = 2H\,\nabla H</span>,</p>
 <p><span id="eq-flat"><span class="math display">
 \bigl|\nabla (H^2)\bigr| = \frac{2\tau}{\rho_i\, g}.
 \tag{2}</span></span></p>
-<p>The singularity is gone: <span class="math inline">w \equiv H^2</span> satisfies a <strong>plain eikonal</strong> <span class="math inline">|\nabla w| = G</span> with a finite right-hand side <span class="math inline">G = 2\tau/(\rho_i g)</span>, and the boundary condition <span class="math inline">w = 0</span> at the margin is regular. Both solver modes work in <span class="math inline">w = H^2</span>; the thickness is recovered as <span class="math inline">H = \sqrt{w}</span> and the surface as <span class="math inline">E = H + B</span>.</p>
+<p>The singularity is gone: the working variable <span class="math inline">w \equiv H^2</span> satisfies a <strong>plain eikonal</strong> <span class="math inline">|\nabla w| = G</span> with a finite right-hand side <span class="math inline">G = 2\tau/(\rho_i g)</span>, and the boundary condition <span class="math inline">w = 0</span> at the margin is regular. Both solver modes work in <span class="math inline">w = H^2</span>; the thickness is recovered as <span class="math inline">H = \sqrt{w}</span> and the surface as <span class="math inline">z_s = H + z_b</span>.</p>
 <section id="flat-mode" class="level3">
 <h3 class="anchored" data-anchor-id="flat-mode"><code>:flat</code> mode</h3>
 <p><code>:flat</code> solves <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a> exactly and drapes the result on the bed. It is the cheapest mode and is appropriate whenever bed relief is small compared with ice thickness (continental interiors). ICESHEET’s own sensitivity tests indicate the bed-gradient terms are second-order except in mountainous terrain.</p>
@@ -241,17 +311,17 @@ window.Quarto = {
 </section>
 <section id="hj-mode-the-bed-gradient-correction" class="level2">
 <h2 class="anchored" data-anchor-id="hj-mode-the-bed-gradient-correction">3. <code>:hj</code> mode — the bed-gradient correction</h2>
-<p>Over significant relief the bed slope <span class="math inline">\nabla B</span> enters the flux. Writing <span class="math inline">\nabla E = \nabla H + \nabla B</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> and carrying the algebra through in the <span class="math inline">w = H^2</span> variable gives, <strong>exactly in one dimension</strong>,</p>
+<p>Over significant relief the bed slope <span class="math inline">\nabla z_b</span> enters the flux. Writing <span class="math inline">\nabla z_s = \nabla H + \nabla z_b</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> and carrying the algebra through in the <span class="math inline">w = H^2</span> variable gives, <strong>exactly in one dimension</strong>,</p>
 <p><span id="eq-hj"><span class="math display">
-|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla B \cdot \nabla w)\;-\;4\,w\,|\nabla B|^2\,},
+|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla z_b \cdot \nabla w)\;-\;4\,w\,|\nabla z_b|^2\,},
 \qquad G = \frac{2\tau}{\rho_i g}.
 \tag{3}</span></span></p>
 <p>Two properties make <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> the right object to solve:</p>
 <ul>
-<li>when <span class="math inline">\nabla B = 0</span> it reduces to the flat eikonal <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>, so <code>:hj</code> and <code>:flat</code> agree exactly on a flat bed;</li>
+<li>when <span class="math inline">\nabla z_b = 0</span> it reduces to the flat eikonal <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>, so <code>:hj</code> and <code>:flat</code> agree exactly on a flat bed;</li>
 <li>it is written in <span class="math inline">w = H^2</span>, so it inherits the regular margin behaviour of <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>.</li>
 </ul>
-<p>The effective right-hand side depends on <span class="math inline">\nabla w</span> (through the <span class="math inline">\nabla B\cdot\nabla w</span> term), so <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> is not a pure eikonal. It is solved by an <strong>outer fixed-point iteration</strong>: freeze the right-hand side from the current <span class="math inline">w</span>, solve the resulting constant-RHS eikonal for a candidate <span class="math inline">w_c</span>, and update.</p>
+<p>The effective right-hand side depends on <span class="math inline">\nabla w</span> (through the <span class="math inline">\nabla z_b\cdot\nabla w</span> term), so <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> is not a pure eikonal. It is solved by an <strong>outer fixed-point iteration</strong>: freeze the right-hand side from the current <span class="math inline">w</span>, solve the resulting constant-RHS eikonal for a candidate <span class="math inline">w_c</span>, and update.</p>
 <section id="damping-is-required" class="level3">
 <h3 class="anchored" data-anchor-id="damping-is-required">Damping is required</h3>
 <p>The naive update <span class="math inline">w \leftarrow \text{Eikonal}\!\left(\text{RHS}(w)\right)</span> is <strong>not contractive</strong> — over real bed relief it oscillates indefinitely. The solver therefore uses an <strong>under-relaxed (damped) Picard iteration</strong>,</p>
@@ -287,9 +357,9 @@ u_{i,j} \leftarrow \min\!\bigl(u_{i,j},\; \text{Godunov update}\bigr),
 <h2 class="anchored" data-anchor-id="boundary-conditions">6. Boundary conditions</h2>
 <p>The margin is the interface between mask (grounded ice) and ice-free cells. Ice-free cells carry the Dirichlet value:</p>
 <ul>
-<li><strong>Land margin</strong> (<span class="math inline">B \ge</span> sea level): <span class="math inline">H = 0</span>, i.e.&nbsp;<span class="math inline">w = 0</span>.</li>
-<li><strong>Marine margin</strong> (<span class="math inline">B &lt;</span> sea level): the grounding line sits at the <strong>flotation thickness</strong> — the thickness whose weight balances the local water column, <span class="math display">
-H_{\text{flot}} = \frac{\rho_w}{\rho_i}\,\bigl(\text{sea level} - B\bigr), \qquad w = H_{\text{flot}}^2,
+<li><strong>Land margin</strong> (<span class="math inline">z_b \ge z_{ss}</span>): <span class="math inline">H = 0</span>, i.e.&nbsp;<span class="math inline">w = 0</span>.</li>
+<li><strong>Marine margin</strong> (<span class="math inline">z_b &lt; z_{ss}</span>, with <span class="math inline">z_{ss}</span> the sea-surface elevation): the grounding line sits at the <strong>flotation thickness</strong> <span class="math inline">H_{flt}</span> — the thickness whose weight balances the local water column, <span class="math display">
+H_{flt} = \frac{\rho_w}{\rho_i}\,\bigl(z_{ss} - z_b\bigr), \qquad w = H_{flt}^2,
 </span> reproducing ICESHEET’s marine grounding-line treatment. The eikonal then grows the ice inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum surface slope <em>is</em> the plastic constraint the eikonal enforces.</li>
 </ul>
 </section>

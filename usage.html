@@ -255,7 +255,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="solving">Solving</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">PlasticIceSheet</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>E, H <span class="op">=</span> <span class="fu">solve</span>(bed, τ, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>hj)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>hj)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 50%">
@@ -269,8 +269,8 @@ window.Quarto = {
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>bed</code></td>
-<td>bed elevation <span class="math inline">B</span> (m), <code>nx × ny</code> matrix</td>
+<td><code>z_b</code></td>
+<td>bed elevation <span class="math inline">z_b</span> (m), <code>nx × ny</code> matrix</td>
 </tr>
 <tr class="even">
 <td><code>τ</code></td>
@@ -289,15 +289,15 @@ window.Quarto = {
 <p>Key options (see the docstring for the rest):</p>
 <ul>
 <li><code>mode</code> — <code>:hj</code> (default, full Hamilton–Jacobi over arbitrary relief) or <code>:flat</code> (flat-bed eikonal, cheapest; exact when relief ≪ thickness).</li>
-<li><code>params</code> — a <code>PlasticParams</code> (densities, gravity, sea level, <code>H_min</code>).</li>
+<li><code>params</code> — a <code>PlasticParams</code> (densities <code>ρ_i</code>/<code>ρ_w</code>, gravity <code>g</code>, sea level <code>z_ss</code>, <code>H_min</code>).</li>
 <li><code>n_outer</code>, <code>outer_tol</code>, <code>relax</code> — <code>:hj</code> damped fixed-point controls. <code>relax</code> ∈ (0,1] is the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.</li>
 </ul>
-<p>Returns <code>(E, H)</code>; ice-free cells have <code>H = 0</code>, <code>E = bed</code>.</p>
+<p>Returns <code>(z_s, H)</code> — surface elevation <span class="math inline">z_s</span> and thickness <span class="math inline">H</span>; ice-free cells have <code>H = 0</code>, <code>z_s = z_b</code>.</p>
 <section id="diagnostics" class="level3">
 <h3 class="anchored" data-anchor-id="diagnostics">Diagnostics</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_volume</span>(H, dx, dy)            <span class="co"># m³</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_area</span>(mask, dx, dy)           <span class="co"># m²</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">surface_misfit</span>(E, E_obs, mask)   <span class="co"># mean-squared surface misfit over ice</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_volume</span>(H, dx, dy)                <span class="co"># m³</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_area</span>(mask, dx, dy)               <span class="co"># m²</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">surface_misfit</span>(z_s, z_s_obs, mask)   <span class="co"># mean-squared surface misfit over ice</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
 <section id="inverting-for-tau" class="level2">
@@ -306,7 +306,7 @@ window.Quarto = {
 <section id="forward-mode-scalar-low-dimensional-tau" class="level3">
 <h3 class="anchored" data-anchor-id="forward-mode-scalar-low-dimensional-tau">Forward mode — scalar / low-dimensional <span class="math inline">\tau</span></h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ForwardDiff</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(bed, τ, mask; dx, dy)), E_obs, mask)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ, mask; dx, dy)), z_s_obs, mask)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> ForwardDiff.<span class="fu">derivative</span>(loss, <span class="fl">1.0e5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="reverse-mode-full-per-cell-tau-field" class="level3">
@@ -314,7 +314,7 @@ window.Quarto = {
 <p>Load the extension triggers, then differentiate <code>differentiable_thickness</code> with any reverse-mode AD:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ImplicitDifferentiation</span>, <span class="bu">ADTypes</span>, <span class="bu">ForwardDiff</span>, <span class="bu">Zygote</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ, bed, mask; dx, dy) <span class="op">.+</span> bed, E_obs, mask)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>A complete, runnable Adam-based recovery of a spatially-varying <span class="math inline">\tau</span> from an observed surface is in <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a>. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.</p>
 <div class="callout callout-style-default callout-tip callout-titled">
@@ -336,9 +336,9 @@ Tip
 <h2 class="anchored" data-anchor-id="netcdf-io">NetCDF I/O</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">NCDatasets</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; bed, τ, mask, dx, dy, x, y)</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>E, H <span class="op">=</span> <span class="fu">solve</span>(inp.bed, inp.τ, inp.mask; inp.dx, inp.dy)</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, E, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ, mask, dx, dy, x, y)</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ, inp.mask; inp.dx, inp.dy)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="caveats" class="level2">
 <h2 class="anchored" data-anchor-id="caveats">Caveats</h2>

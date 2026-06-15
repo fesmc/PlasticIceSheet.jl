@@ -242,9 +242,9 @@ window.Quarto = {
 <p>It is meant as a <em>complementary first-guess tool</em> next to a full dynamic model (e.g. <a href="https://github.com/palma-ice/yelmo">Yelmo</a>) and an independent GIA / sea-level solver: to seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.</p>
 <section id="the-idea-in-one-equation" class="level2">
 <h2 class="anchored" data-anchor-id="the-idea-in-one-equation">The idea in one equation</h2>
-<p>The ice surface satisfies the perfectly-plastic balance — driving stress equals basal shear stress everywhere:</p>
+<p>The ice surface elevation <span class="math inline">z_s</span> over a bed <span class="math inline">z_b</span>, with thickness <span class="math inline">H = z_s - z_b</span>, satisfies the perfectly-plastic balance — driving stress equals basal shear stress <span class="math inline">\tau</span> everywhere:</p>
 <p><span class="math display">
-|\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = E - B .
+|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = z_s - z_b .
 </span></p>
 <p>This is a static <strong>Hamilton–Jacobi (eikonal) equation</strong>. Solving it with an upwind grid scheme means saddles, domes, and coalescing ice caps emerge automatically from the viscosity solution — there is no flowline tracing, crossover detection, or saddle bookkeeping. See <a href="./algorithms.html">Algorithms</a> for the full derivation and numerics.</p>
 </section>
