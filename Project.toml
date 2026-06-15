@@ -1,0 +1,35 @@
+name = "PlasticIceSheet"
+uuid = "93662aab-ba50-4a1d-a5d1-023c4578c01c"
+authors = ["Alexander Robinson <ajr225@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[weakdeps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+ImplicitDifferentiation = "57b37032-215b-411a-8a7c-41a003a55207"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+
+[extensions]
+PlasticIceSheetImplicitDiffExt = ["ImplicitDifferentiation", "ADTypes", "ForwardDiff"]
+PlasticIceSheetNetCDFExt = "NCDatasets"
+
+[compat]
+ADTypes = "1"
+ForwardDiff = "0.10, 1"
+ImplicitDifferentiation = "0.9"
+NCDatasets = "0.13, 0.14"
+julia = "1.10"
+
+[extras]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+ImplicitDifferentiation = "57b37032-215b-411a-8a7c-41a003a55207"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[targets]
+test = ["Test", "ForwardDiff", "ImplicitDifferentiation", "ADTypes", "Zygote", "NCDatasets"]
