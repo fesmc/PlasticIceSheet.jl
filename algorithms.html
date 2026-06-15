@@ -42,7 +42,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-6c645bba97489949a6ce198fa08f5136.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-e16872440047994247dd28c82fe9c6b4.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -224,7 +224,7 @@ window.Quarto = {
 |\nabla E| = \frac{\tau}{\rho_i\, g\, (E - B)} = \frac{\tau}{\rho_i\, g\, H},
 \tag{1}</span></span></p>
 <p>with <span class="math inline">\rho_i</span> the ice density and <span class="math inline">g</span> gravity. The right-hand side is a slope (dimensionless). <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> is a static <strong>Hamilton–Jacobi equation</strong>: the surface is built inward from the margin, where <span class="math inline">H \to 0</span>. Its upwind (viscosity) solution automatically yields the correct envelope wherever ice converges, so ice divides, domes, and merging ice caps appear without any explicit flowline or saddle handling.</p>
-<p>This is the same physics as ICESHEET 1.0, but solved on a grid rather than by tracing characteristics.</p>
+<p>This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing characteristics.</p>
 </section>
 <section id="solve-for-h2-not-e" class="level2">
 <h2 class="anchored" data-anchor-id="solve-for-h2-not-e">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">E</span></h2>
@@ -331,7 +331,7 @@ r_{i,j}(w, \tau) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
 </section>
 <section id="what-was-deliberately-dropped" class="level2">
 <h2 class="anchored" data-anchor-id="what-was-deliberately-dropped">8. What was deliberately dropped</h2>
-<p>Relative to ICESHEET 1.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline. See the <a href="./PLAN.html">Design notes</a> for the full accounting.</p>
+<p>Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline. See the <a href="./PLAN.html">Design notes</a> for the full accounting.</p>
 
 
 </section>

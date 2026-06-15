@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-6c645bba97489949a6ce198fa08f5136.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-e16872440047994247dd28c82fe9c6b4.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -238,6 +238,7 @@ window.Quarto = {
 
 
 <p><code>PlasticIceSheet.jl</code> reconstructs a perfectly-plastic, steady-state ice sheet from three inputs — a grounded-ice <strong>margin/mask</strong>, a <strong>bed topography</strong> <span class="math inline">B</span>, and a <strong>basal shear stress</strong> field <span class="math inline">\tau</span> — and returns a glaciologically plausible ice <strong>surface</strong> <span class="math inline">E</span> and <strong>thickness</strong> <span class="math inline">H</span>. There is no time-stepping, no climate, and no ice dynamics.</p>
+<p>It is a clean-room simplification and modernization of <strong>ICESHEET 2.0</strong> by Evan Gowan and colleagues — <a href="https://github.com/evangowan/icesheet">source code</a>, the method’s description paper (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al., 2016, <em>Geosci. Model Dev.</em></a>), and its global application to the past 80,000 years (<a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al., 2021, <em>Nat. Commun.</em></a>). The core physics — a single published equation — is retained, while ICESHEET’s recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver (see <a href="#origin">Origin</a>).</p>
 <p>It is meant as a <em>complementary first-guess tool</em> next to a full dynamic model (e.g. <a href="https://github.com/palma-ice/yelmo">Yelmo</a>) and an independent GIA / sea-level solver: to seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.</p>
 <section id="the-idea-in-one-equation" class="level2">
 <h2 class="anchored" data-anchor-id="the-idea-in-one-equation">The idea in one equation</h2>
@@ -262,7 +263,7 @@ window.Quarto = {
 </section>
 <section id="origin" class="level2">
 <h2 class="anchored" data-anchor-id="origin">Origin</h2>
-<p>This is a clean-room simplification and modernization of <strong>ICESHEET 1.0</strong> (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al.&nbsp;2016, <em>GMD</em></a>; <a href="https://github.com/evangowan/icesheet">source</a>). The core physics — one published equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple hundred lines. The <a href="./PLAN.html">Design notes</a> record what was kept, simplified, and dropped, and why.</p>
+<p>This is a clean-room simplification and modernization of <strong><a href="https://github.com/evangowan/icesheet">ICESHEET 2.0</a></strong> (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al.&nbsp;2016, <em>GMD</em></a>; <a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al.&nbsp;2021, <em>Nat. Commun.</em></a>). The core physics — one published equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple hundred lines. The <a href="./PLAN.html">Design notes</a> record what was kept, simplified, and dropped, and why.</p>
 <p><code>PlasticIceSheet.jl</code> is MIT-licensed.</p>
 
 
