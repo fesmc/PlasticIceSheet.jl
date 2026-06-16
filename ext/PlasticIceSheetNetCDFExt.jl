@@ -13,7 +13,7 @@ function PlasticIceSheet.load_plastic_inputs(path::AbstractString;
         yv    = Array{Float64}(ds[y][:])
         dx = length(xv) > 1 ? abs(xv[2] - xv[1]) : one(eltype(xv))
         dy = length(yv) > 1 ? abs(yv[2] - yv[1]) : one(eltype(yv))
-        return (; z_b = z_bv, τ = tauv, mask = maskv, dx, dy, x = xv, y = yv)
+        return (; z_b = z_bv, τ_b = tauv, mask = maskv, dx, dy, x = xv, y = yv)
     end
 end
 

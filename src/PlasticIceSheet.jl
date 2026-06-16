@@ -2,12 +2,12 @@
     PlasticIceSheet
 
 Perfectly-plastic, steady-state ice-sheet reconstruction by solving the plastic surface
-equation `|∇z_s| = τ / (ρ_i g (z_s − z_b))` as a static Hamilton–Jacobi (eikonal) problem
+equation `|∇z_s| = τ_b / (ρ_i g (z_s − z_b))` as a static Hamilton–Jacobi (eikonal) problem
 on a grid with fast sweeping. A simplification and modernization of ICESHEET 2.0
 (Gowan et al. 2016, <https://github.com/evangowan/icesheet>); see `docs/PLAN.md`.
 
-Inputs: a grounded-ice `mask`, bed elevation `z_b`, and basal shear stress `τ`.
-Outputs: ice surface elevation `z_s` and thickness `H`. AD-friendly w.r.t. `τ`.
+Inputs: a grounded-ice `mask`, bed elevation `z_b`, and basal shear stress `τ_b`.
+Outputs: ice surface elevation `z_s` and thickness `H`. AD-friendly w.r.t. `τ_b`.
 """
 module PlasticIceSheet
 
@@ -27,7 +27,7 @@ export load_plastic_inputs, save_reconstruction
 # activated by `ImplicitDifferentiation` (with an AD backend). The extension method is
 # more specific, so it takes precedence whenever the trigger packages are loaded.
 function differentiable_thickness(args...; kwargs...)
-    error("`differentiable_thickness` (reverse-mode τ inversion) needs the implicit-" *
+    error("`differentiable_thickness` (reverse-mode τ_b inversion) needs the implicit-" *
           "differentiation extension. Load its triggers first:\n" *
           "    using ImplicitDifferentiation, ADTypes, ForwardDiff")
 end

@@ -5,7 +5,7 @@
     load_plastic_inputs(path; z_b="z_b", tau="tau", mask="mask", x="x", y="y")
 
 Read reconstruction inputs from a NetCDF file. Returns a NamedTuple
-`(; z_b, τ, mask, dx, dy, x, y)` with `z_b` (bed elevation) and `τ` as matrices, `mask` a
+`(; z_b, τ_b, mask, dx, dy, x, y)` with `z_b` (bed elevation) and `τ_b` as matrices, `mask` a
 `BitMatrix` (nonzero ⇒ grounded ice), and `dx`, `dy` inferred from the `x`/`y` coordinate
 vectors.
 

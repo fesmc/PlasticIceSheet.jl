@@ -19,7 +19,7 @@ ice_area(mask, dx, dy) = count(mask) * dx * dy
     surface_misfit(z_s, z_s_obs, mask)
 
 Mean-squared surface-elevation misfit over grounded-ice cells — a basic objective for
-inverting `τ` against a target surface (e.g. observed topography or a Yelmo field).
+inverting `τ_b` against a target surface (e.g. observed topography or a Yelmo field).
 """
 function surface_misfit(z_s, z_s_obs, mask)
     s = zero(eltype(z_s))

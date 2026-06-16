@@ -1,7 +1,7 @@
 # Physical parameters for the perfectly-plastic ice-sheet reconstruction.
 #
 # These are held as plain (non-differentiated) scalars: the AD target is the basal
-# shear stress field `τ`, not these constants. Defaults match ICESHEET
+# shear stress field `τ_b`, not these constants. Defaults match ICESHEET
 # (Gowan et al. 2016, global_parameters.f90).
 
 """
@@ -14,7 +14,7 @@ Physical constants and reconstruction settings.
 - `g`     : gravitational acceleration (m s⁻²), default 9.80665
 - `z_ss`  : sea-surface elevation (sea level) (m), default 0.0
 - `H_min` : minimum thickness floor (m) used to keep the driving-stress slope
-            `τ / (ρ_i g H)` finite in `:hj` mode, default 1.0
+            `τ_b / (ρ_i g H)` finite in `:full` mode, default 1.0
 """
 Base.@kwdef struct PlasticParams{T<:Real}
     ρ_i::T   = 917.0

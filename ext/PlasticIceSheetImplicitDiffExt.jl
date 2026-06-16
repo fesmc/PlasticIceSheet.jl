@@ -1,12 +1,12 @@
 module PlasticIceSheetImplicitDiffExt
 
 # Reverse-mode-differentiable thickness solve w.r.t. a full per-cell basal shear stress
-# field `τ`, via implicit differentiation of the converged Godunov fixed point.
+# field `τ_b`, via implicit differentiation of the converged Godunov fixed point.
 #
 # The forward fast sweep is treated as a black box; only the optimality conditions
-# `godunov_residual(w, τ) = 0` are differentiated (with ForwardDiff), and the implicit
-# function theorem yields ∂w/∂τ from a single linear solve — independent of the number
-# of sweeps / outer iterations, and scalable to a full `τ` field. The user's outer AD
+# `godunov_residual(w, τ_b) = 0` are differentiated (with ForwardDiff), and the implicit
+# function theorem yields ∂w/∂τ_b from a single linear solve — independent of the number
+# of sweeps / outer iterations, and scalable to a full `τ_b` field. The user's outer AD
 # (e.g. Zygote) gets the gradient through ImplicitDifferentiation's ChainRules rule.
 
 using PlasticIceSheet
@@ -16,13 +16,13 @@ using ADTypes: AutoForwardDiff
 import ForwardDiff  # provides the backend used to differentiate the conditions
 
 """
-    differentiable_thickness(τ, z_b, mask; dx, dy, mode=:hj, params=PlasticParams(),
+    differentiable_thickness(τ_b, z_b, mask; dx, dy, mode=:full, params=PlasticParams(),
                              max_sweeps, tol, n_outer, outer_tol,
                              representation=MatrixRepresentation(),
                              linear_solver=DirectLinearSolver())
 
 Reverse-mode-differentiable ice thickness `H` as a function of a full per-cell basal
-shear stress field `τ` (with bed elevation `z_b`), via implicit differentiation of the
+shear stress field `τ_b` (with bed elevation `z_b`), via implicit differentiation of the
 converged Godunov fixed point. Use as the inner solve of a basal-shear-stress inversion;
 differentiate a scalar objective of `H` with any reverse-mode AD (e.g. Zygote).
 
@@ -33,21 +33,21 @@ large grids pass `representation=OperatorRepresentation()` and
 the eikonal adjoint's characteristics span the domain).
 """
 function PlasticIceSheet.differentiable_thickness(
-        τ::AbstractMatrix, z_b::AbstractMatrix, mask::AbstractMatrix{Bool};
-        dx::Real, dy::Real, mode::Symbol = :hj,
+        τ_b::AbstractMatrix, z_b::AbstractMatrix, mask::AbstractMatrix{Bool};
+        dx::Real, dy::Real, mode::Symbol = :full,
         params::PlasticParams = PlasticParams(),
         max_sweeps::Int = 200, tol = 1e-6, n_outer::Int = 200, outer_tol = 1e-5,
         relax = 0.5,
         representation = MatrixRepresentation(),
         linear_solver = DirectLinearSolver())
 
-    size(z_b) == size(mask) == size(τ) ||
-        throw(DimensionMismatch("τ, z_b and mask must share the same shape"))
+    size(z_b) == size(mask) == size(τ_b) ||
+        throw(DimensionMismatch("τ_b, z_b and mask must share the same shape"))
 
     bc = _bc_flat.(z_b, Ref(params))
     shape = size(z_b)
-    # Constant (non-differentiated) context carried alongside the differentiated `τ`.
-    # `:hj` needs a tightly-converged forward solve (small residual) for the implicit
+    # Constant (non-differentiated) context carried alongside the differentiated `τ_b`.
+    # `:full` needs a tightly-converged forward solve (small residual) for the implicit
     # gradient to be exact, hence the firmer n_outer / outer_tol defaults here.
     ctx = (; z_b, mask, bc, dx, dy, params, mode, shape,
            max_sweeps, tol, n_outer, outer_tol, relax)
@@ -73,7 +73,7 @@ function PlasticIceSheet.differentiable_thickness(
     implicit = ImplicitFunction(solver, conditions; representation, linear_solver,
                                 backends = (; x = AutoForwardDiff(), y = AutoForwardDiff()))
 
-    wvec, _ = implicit(τ, ctx)
+    wvec, _ = implicit(τ_b, ctx)
     w = reshape(wvec, shape)
     # H = √w on ice, 0 elsewhere — written as a mask-multiply with a floored √ so the
     # reverse pass never evaluates sqrt'(0)=Inf (which would give Inf·0 = NaN under

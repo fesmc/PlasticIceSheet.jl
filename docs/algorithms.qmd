@@ -13,49 +13,57 @@ respect to the shear stress.
 | $z_s$ | `z_s` | ice **surface** elevation (m) |
 | $z_b$ | `z_b` | **bed** elevation (m) |
 | $H = z_s - z_b$ | `H` | ice **thickness** (m) |
-| $\tau$ | `τ` | basal **shear stress** (Pa) |
+| $\tau_b$ | `τ_b` | basal **shear stress** (Pa) |
 | $z_{ss}$ | `z_ss` | sea-surface elevation, i.e. sea level (m) |
 | $H_{flt}$ | — | marine **flotation** thickness (m) |
 | $\rho_i,\ \rho_w$ | `ρ_i, ρ_w` | ice / sea-water density (kg m⁻³) |
 | $g$ | `g` | gravitational acceleration (m s⁻²) |
 | $w \equiv H^2$ | `w` | the solver's working variable (m²) |
-| $G \equiv 2\tau/(\rho_i g)$ | — | flat-bed eikonal right-hand side (m) |
+| $G \equiv 2\tau_b/(\rho_i g)$ | — | flat-bed eikonal right-hand side (m) |
 
 ## 1. The governing equation
 
-The reconstruction assumes **perfectly plastic, steady-state** ice: the gravitational
-driving stress is everywhere balanced by the basal shear stress $\tau$. For an ice
-surface elevation $z_s$, bed elevation $z_b$, and thickness $H = z_s - z_b$, this balance
-is
+The reconstruction assumes **perfectly plastic, steady-state** ice. The defining quantity
+is the **basal shear stress** $\tau_b$, which under this assumption balances the
+gravitational driving stress — for an ice surface elevation $z_s$, bed elevation $z_b$,
+and thickness $H = z_s - z_b$, with $\rho_i$ the ice density and $g$ gravity:
 
 $$
-|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H},
+\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
+$$ {#eq-driving}
+
+In a reconstruction $\tau_b$ is *prescribed* (it is the field we choose or invert for) and
+the surface $z_s$ is the unknown. Rearranging @eq-driving for the surface slope gives the
+equation we actually solve:
+
+$$
+|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
 $$ {#eq-plastic}
 
-with $\rho_i$ the ice density and $g$ gravity. The right-hand side is a slope
-(dimensionless). @eq-plastic is a static **Hamilton–Jacobi equation**: the surface is
-built inward from the margin, where $H \to 0$. Its upwind (viscosity) solution
-automatically yields the correct envelope wherever ice converges, so ice divides, domes,
-and merging ice caps appear without any explicit flowline or saddle handling.
+The right-hand side is a slope (dimensionless). @eq-plastic is a static **Hamilton–Jacobi
+equation**: the surface is built inward from the margin, where $H \to 0$. Its upwind
+(viscosity) solution automatically yields the correct envelope wherever ice converges, so
+ice divides, domes, and merging ice caps appear without any explicit flowline or saddle
+handling.
 
 This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing
 characteristics.
 
 ## 2. Solve for $H^2$, not $z_s$
 
-Near the margin $H \to 0$, so the driving slope $\tau/(\rho_i g H)$ in @eq-plastic
+Near the margin $H \to 0$, so the driving slope $\tau_b/(\rho_i g H)$ in @eq-plastic
 **diverges**. Discretising @eq-plastic for $z_s$ directly is therefore inaccurate near the
 margin and biases the whole reconstruction thin. The fix is a change of variable.
 
-On a flat bed, @eq-plastic reads $|\nabla H| = \tau/(\rho_i g H)$. Multiplying by $2H$ and
+On a flat bed, @eq-plastic reads $|\nabla H| = \tau_b/(\rho_i g H)$. Multiplying by $2H$ and
 using $\nabla(H^2) = 2H\,\nabla H$,
 
 $$
-\bigl|\nabla (H^2)\bigr| = \frac{2\tau}{\rho_i\, g}.
+\bigl|\nabla (H^2)\bigr| = \frac{2\tau_b}{\rho_i\, g}.
 $$ {#eq-flat}
 
 The singularity is gone: the working variable $w \equiv H^2$ satisfies a **plain eikonal**
-$|\nabla w| = G$ with a finite right-hand side $G = 2\tau/(\rho_i g)$, and the boundary
+$|\nabla w| = G$ with a finite right-hand side $G = 2\tau_b/(\rho_i g)$, and the boundary
 condition $w = 0$ at the margin is regular. Both solver modes work in $w = H^2$; the
 thickness is recovered as $H = \sqrt{w}$ and the surface as $z_s = H + z_b$.
 
@@ -66,7 +74,7 @@ and is appropriate whenever bed relief is small compared with ice thickness (con
 interiors). ICESHEET's own sensitivity tests indicate the bed-gradient terms are
 second-order except in mountainous terrain.
 
-## 3. `:hj` mode — the bed-gradient correction
+## 3. `:full` mode — the bed-gradient correction {#sec-full}
 
 Over significant relief the bed slope $\nabla z_b$ enters the flux. Writing
 $\nabla z_s = \nabla H + \nabla z_b$ in @eq-plastic and carrying the algebra through in the
@@ -74,12 +82,12 @@ $w = H^2$ variable gives, **exactly in one dimension**,
 
 $$
 |\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla z_b \cdot \nabla w)\;-\;4\,w\,|\nabla z_b|^2\,},
-\qquad G = \frac{2\tau}{\rho_i g}.
+\qquad G = \frac{2\tau_b}{\rho_i g}.
 $$ {#eq-hj}
 
 Two properties make @eq-hj the right object to solve:
 
-- when $\nabla z_b = 0$ it reduces to the flat eikonal @eq-flat, so `:hj` and `:flat` agree
+- when $\nabla z_b = 0$ it reduces to the flat eikonal @eq-flat, so `:full` and `:flat` agree
   exactly on a flat bed;
 - it is written in $w = H^2$, so it inherits the regular margin behaviour of @eq-flat.
 
@@ -159,32 +167,32 @@ carry the Dirichlet value:
   inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum
   surface slope *is* the plastic constraint the eikonal enforces.
 
-## 7. Differentiating with respect to $\tau$
+## 7. Differentiating with respect to $\tau_b$ {#sec-ad}
 
-Because the solver is a pure function of $\tau$, an objective on the output (a misfit to an
+Because the solver is a pure function of $\tau_b$, an objective on the output (a misfit to an
 observed surface, a target volume, …) is differentiable — enabling **basal-shear-stress
 inversion**.
 
 ### Forward mode
 
-For a scalar $\tau$ or a low-dimensional parameterization, `ForwardDiff` differentiates
+For a scalar $\tau_b$ or a low-dimensional parameterization, `ForwardDiff` differentiates
 straight through `solve`. Cost scales with the number of parameters.
 
 ### Reverse mode (implicit differentiation)
 
-For a full per-cell $\tau$ field, differentiating through the sweeps would be wasteful.
+For a full per-cell $\tau_b$ field, differentiating through the sweeps would be wasteful.
 Instead, the converged field satisfies an **optimality condition** — the Godunov residual
 
 $$
-r_{i,j}(w, \tau) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
+r_{i,j}(w, \tau_b) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
 $$
 
 on ice cells (and $w - \text{bc} = 0$ off-ice). By the implicit function theorem, for a
 loss $L(w)$,
 
 $$
-\frac{\partial L}{\partial \tau}
-= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau},
+\frac{\partial L}{\partial \tau_b}
+= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau_b},
 $$
 
 so the gradient costs a single linear solve with the residual Jacobian, **independent of
@@ -194,7 +202,7 @@ internally). This is wired up with
 [`ImplicitDifferentiation.jl`](https://github.com/JuliaDecisionFocusedLearning/ImplicitDifferentiation.jl)
 in a package extension, so any reverse-mode AD (e.g. Zygote) obtains the gradient.
 
-The `:flat` gradient is exact to machine precision; the `:hj` gradient is exact once the
+The `:flat` gradient is exact to machine precision; the `:full` gradient is exact once the
 damped forward solve (§3) has driven the residual to $\approx 0$.
 
 ::: {.callout-note}

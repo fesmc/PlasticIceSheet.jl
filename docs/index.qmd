@@ -4,8 +4,8 @@ subtitle: "Fast, AD-friendly perfectly-plastic ice-sheet reconstruction"
 ---
 
 `PlasticIceSheet.jl` reconstructs a perfectly-plastic, steady-state ice sheet from three
-inputs — a grounded-ice **margin/mask**, a **bed topography** $B$, and a **basal shear
-stress** field $\tau$ — and returns a glaciologically plausible ice **surface** $E$ and
+inputs — a grounded-ice **margin/mask**, a **bed elevation** $z_b$, and a **basal shear
+stress** field $\tau_b$ — and returns a glaciologically plausible ice **surface** $z_s$ and
 **thickness** $H$. There is no time-stepping, no climate, and no ice dynamics.
 
 It is a clean-room simplification and modernization of **ICESHEET 2.0** by Evan Gowan and
@@ -24,11 +24,18 @@ seed a spin-up, force a surface-mass-balance model, or serve as a relaxation tar
 
 ## The idea in one equation
 
-The ice surface elevation $z_s$ over a bed $z_b$, with thickness $H = z_s - z_b$, satisfies
-the perfectly-plastic balance — driving stress equals basal shear stress $\tau$ everywhere:
+Under a perfectly-plastic, steady-state assumption, the **basal shear stress** $\tau_b$
+balances the gravitational driving stress everywhere — for surface elevation $z_s$, bed
+elevation $z_b$, and thickness $H = z_s - z_b$:
 
 $$
-|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = z_s - z_b .
+\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
+$$
+
+Given a prescribed $\tau_b$, rearranging for the surface slope gives the equation we solve:
+
+$$
+|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
 $$
 
 This is a static **Hamilton–Jacobi (eikonal) equation**. Solving it with an upwind grid
@@ -45,13 +52,13 @@ nx, ny = 100, 100
 dx = dy = 2000.0                                   # grid spacing (m)
 bed  = zeros(nx, ny)                               # bed elevation B (m)
 mask = [hypot(i-50.5, j-50.5) <= 40 for i in 1:nx, j in 1:ny]
-τ    = 1.0e5                                       # basal shear stress (Pa)
+τ_b    = 1.0e5                                       # basal shear stress (Pa)
 
-E, H = solve(bed, τ, mask; dx, dy, mode = :hj)     # :hj (default) or :flat
+E, H = solve(bed, τ_b, mask; dx, dy, mode = :full)     # :full (default) or :flat
 ```
 
 A full Hamilton–Jacobi solve on a 300×300 grid takes ~0.1 s. The basal shear stress
-$\tau$ is differentiable, enabling gradient-based [inversion](usage.qmd#inverting-for).
+$\tau_b$ is differentiable, enabling gradient-based [inversion](usage.qmd#inverting-for).
 
 ## Origin
 
