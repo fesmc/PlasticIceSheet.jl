@@ -21,6 +21,12 @@ respect to the shear stress.
 | $g$ | `g` | gravitational acceleration (m s⁻²) |
 | $w \equiv H^2$ | `w` | the solver's working variable (m²) |
 | $G \equiv 2\tau_b/(\rho_i g)$ | — | flat-bed eikonal right-hand side (m) |
+| $\bar{\mathbf u}$ | `ū` | depth-averaged horizontal velocity (m yr⁻¹) |
+| $u_b,\ u_d$ | `u_b, u_def` | basal-sliding / internal-deformation speed |
+| $A,\ n$ | `A, n` | Glen rate factor / exponent |
+| $\beta$ | `β` | sliding-law coefficient |
+| $\dot b$ | `smb` | surface mass balance (m yr⁻¹) |
+| $\mathbf q = \bar{\mathbf u} H$ | `Q` | vertically-integrated ice flux |
 
 ## 1. The governing equation
 
@@ -226,7 +232,136 @@ floored at $H_{\min}^2$, because the unguarded $\sqrt{0}$ derivative produces $\
 = \text{NaN}$ in the reverse pass (forward mode dodges this by branch selection).
 :::
 
-## 8. What was deliberately dropped
+## 8. Velocity and surface mass balance {#sec-closures}
+
+The plastic solve returns *geometry* and nothing else. By taking the perfectly-plastic
+($n\to\infty$) limit it has discarded exactly the rate-dependent information that a rate
+factor, a velocity, and a surface mass balance (SMB) live in — the shape is rate-independent
+by construction. Those quantities are not hidden in the solution waiting to be read off;
+recovering them requires *one extra closure* layered on the fixed geometry.
+
+### The geometry already fixes the flow direction
+
+The plastic balance @eq-plastic-stress is the **membrane-free limit of the SSA/DIVA
+momentum balance**: with $\tau_d=\tau_b$ and the basal drag opposing flow, the
+longitudinal-stress-divergence term vanishes. Two consequences follow. First, the velocity
+is *local and analytical* — no elliptic solve. Second, ice flows down the surface gradient,
+along the characteristics of the eikonal, so the direction is known everywhere:
+
+$$
+\hat{\mathbf u} = -\,\frac{\nabla z_s}{|\nabla z_s|}.
+$$ {#eq-flowdir}
+
+What the geometry does **not** fix is the flux magnitude — a plastic bed sets the direction
+but not the speed. Closing that gap needs one assumption, and there are two dual ways to
+make it.
+
+### Closure B — parameters → velocity → SMB {#sec-closureB}
+
+Assume a rheology and a sliding law. The depth-averaged speed splits into internal
+deformation and basal sliding, both evaluated at the local driving stress $\tau=\tau_b$:
+
+$$
+|\bar{\mathbf u}| = \underbrace{u_b(\tau_b)}_{\text{sliding law}}
+\;+\; \underbrace{\frac{2A}{n+2}\,\tau_b^{\,n}\,H}_{\text{SIA deformation}} .
+$$ {#eq-diva-speed}
+
+The deformational term is the SIA closed form with the plastic constraint $\tau_d=\tau_b$
+substituted; the sliding term inverts the chosen law for the speed that produces drag
+$\tau_b$ (`basal_velocity`). For a regularized-Coulomb bed at its Coulomb cap the sliding
+speed is genuinely undetermined and is returned as `NaN` rather than fabricated. With
+$\bar{\mathbf u}=|\bar{\mathbf u}|\,\hat{\mathbf u}$ in hand, steady-state mass continuity
+gives the implied SMB as a flux divergence:
+
+$$
+\dot b = \nabla\!\cdot\mathbf q = \nabla\!\cdot(\bar{\mathbf u}\,H).
+$$ {#eq-smbB}
+
+This is `diva_velocity` followed by `smb_from_velocity`. Because the velocity is a smooth
+function of $\tau_b$, so is the SMB — the whole closure doubles as an observation operator
+for $\tau_b$ inversion (§7).
+
+### Closure A — SMB → velocity {#sec-closureA}
+
+The dual. Prescribe $\dot b$ and route it down the fixed surface to recover the flux the ice
+*must* carry to be in steady state — the **balance velocity** (Budd & Warner 1996):
+
+$$
+\nabla\!\cdot\mathbf q = \dot b, \qquad \mathbf q \parallel \hat{\mathbf u}, \qquad
+|\bar{\mathbf u}| = \frac{|\mathbf q|}{H}.
+$$ {#eq-smbA}
+
+This is the rigorous reading when $\tau_b$ is a basal sliding resistance, where the speed is
+non-local — set by upstream accumulation, not local rheology. It is `balance_flux` /
+`balance_velocity`.
+
+### One discrete flux operator {#sec-mfd}
+
+Closures A and B are exact inverses *in the continuum*, and the implementation preserves
+that **discretely**. Both are built on a single finite-volume **multiple-flow-direction
+(MFD)** operator: a cell's throughput is partitioned to its lower grounded neighbours in
+proportion to their surface drop. The routing (`balance_flux`, source → throughput) and the
+implied-SMB divergence (`smb_from_velocity`, throughput → source) use the *same* weights, so
+they are adjoint and
+
+$$
+\texttt{balance\_flux}\bigl(\texttt{smb\_from\_velocity}(\bar{\mathbf u})\bigr) = \bar{\mathbf u}\,H
+$$
+
+holds to machine precision. Routing processes cells from highest surface to lowest, so every
+upstream contribution has arrived before a cell distributes its throughput; flux delivered
+to the margin terminates there (the catchment discharge), and mass is conserved exactly.
+This consistency is not cosmetic — it is what makes the SMB-driven reconstruction (§9) have
+a clean fixed point.
+
+### Consistency: where A and B meet
+
+Subtracting the analytical deformation @eq-diva-speed from the balance speed @eq-smbA leaves
+the basal velocity the geometry and SMB jointly demand,
+
+$$
+u_{\text{basal}} = u_{\text{balance}} - u_d,
+$$ {#eq-consistency}
+
+(`implied_basal_velocity`). Inverting a sliding law at this $u_{\text{basal}}$ and the local
+$\tau_b$ gives the bed friction implied by the reconstruction — a check on whether the
+plastic geometry plus an assumed climate is consistent with a plausible bed. A negative
+value flags a cell where the balance flux is smaller than internal deformation alone would
+carry.
+
+## 9. SMB-driven reconstruction {#sec-reconstruct}
+
+Closures A and B read quantities *off* a geometry. Their machinery also supports the dual of
+`solve` itself: reconstruct the geometry **driven by an SMB** instead of a prescribed yield
+stress, on the same prescribed margin (`diva_reconstruct`). This is the plastic solver with
+$\tau_b$ no longer prescribed but *derived* each iteration:
+
+1. route $\dot b$ down the current surface for the required throughput $\mathbf q$ (§8);
+2. invert the DIVA flux law @eq-diva-speed pointwise for the driving stress $\tau_d$ that
+   carries it, $|\mathbf q| = H\bigl(u_b(\tau_d) + \tfrac{2A}{n+2}\tau_d^{\,n}H\bigr)$
+   (monotone in $\tau_d$, solved by bisection);
+3. sweep the plastic eikonal (§4–5) with that $\tau_d$ field for an updated thickness;
+4. under-relax and repeat.
+
+Because routing is the exact inverse of the implied-SMB divergence (§8), a plastic solution
+fed its own closure-B SMB is a **clean fixed point**: step 1 recovers exactly
+$\bar{\mathbf u}H$, step 2 returns exactly the original $\tau_b$, and step 3 reproduces the
+geometry. The eikonal in step 3 also makes the thickness non-local — the interior, where the
+local flux-to-thickness map is singular at divides, is set by integrating inward from the
+margin rather than cell by cell.
+
+Like the `:full` outer iteration (§3), the "route, re-invert, re-sweep" map is **not
+contractive** and must be under-relaxed (@eq-hj's damping, here with default
+$\alpha=\texttt{relax}=0.05$). Stiffer or finer grids trade a smaller $\alpha$ for more
+iterations.
+
+This is the lighter middle path between the plastic reconstruction (margin and yield stress
+in, geometry out; SMB-agnostic) and a full thermomechanical model: it stays a plastic-style
+geometry solver but is driven by climate. A complete free-margin, nonlinear-diffusion steady
+state is deliberately *not* attempted here — that is the job of a dynamic model such as
+[Yelmo](https://github.com/palma-ice/yelmo).
+
+## 10. What was deliberately dropped
 
 Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery
 unnecessary: method-of-characteristics flowline tracing, crossover detection (the

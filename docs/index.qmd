@@ -45,6 +45,11 @@ scheme means saddles, domes, and coalescing ice caps emerge automatically from t
 viscosity solution — there is no flowline tracing, crossover detection, or saddle
 bookkeeping. See [Algorithms](algorithms.qmd) for the full derivation and numerics.
 
+An optional **DIVA closure** layered on the fixed geometry recovers what perfect plasticity
+discards — a depth-averaged velocity and a first-order surface mass balance — and its dual
+can drive the geometry *from* an SMB instead of a yield stress
+([Algorithms §8–9](algorithms.qmd#sec-closures)).
+
 ## Quick start
 
 ```julia

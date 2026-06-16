@@ -47,6 +47,67 @@ ice_area(mask, dx, dy)               # m²
 surface_misfit(z_s, z_s_obs, mask)   # mean-squared surface misfit over ice
 ```
 
+## Velocity and surface mass balance
+
+The plastic solve returns only geometry. A **DIVA closure** layered on the fixed geometry
+recovers a depth-averaged velocity and a first-order SMB — see
+[Algorithms §8](algorithms.qmd#sec-closures) for the theory. Pick a rheology and a sliding
+law:
+
+```julia
+rheology = GlenRheology(A = 1.0e-16, n = 3.0)           # isothermal Glen
+sliding  = WeertmanSliding(β = 1.0e4, m = 3.0)          # also LinearSliding(β),
+                                                        # RegularizedCoulomb(C, u_0, m)
+```
+
+### Closure B — velocity, then implied SMB
+
+```julia
+vel = diva_velocity(z_s, H, τ_b, mask, dx, dy; rheology, sliding)
+# named tuple: ux, uy, speed, u_b (sliding), u_def (deformation), ex, ey (flow direction)
+
+smb = smb_from_velocity(vel, H, z_s, mask, dx, dy)      # ḃ = ∇·(ūH)
+```
+
+`RegularizedCoulomb` returns a `NaN` basal speed wherever `τ_b ≥ C` (bed at the Coulomb
+cap, sliding speed undetermined) — those cells should take their speed from closure A.
+
+### Closure A — balance velocity from a prescribed SMB
+
+```julia
+bal = balance_velocity(z_s, H, mask, smb, dx, dy)       # named tuple: speed, ux, uy, Q, ...
+```
+
+`balance_flux` (routing) is the exact inverse of `smb_from_velocity`, so feeding closure B's
+SMB back through closure A recovers closure B's velocity to machine precision.
+
+### Consistency — the implied bed
+
+```julia
+ib = implied_basal_velocity(z_s, H, τ_b, mask, smb, dx, dy; rheology)
+# u_basal = u_balance − u_def: the basal velocity the geometry + SMB demand
+```
+
+Inverting a sliding law at `ib.u_basal` and the local `τ_b` gives the friction implied by
+the reconstruction — a check on whether the geometry and assumed climate are consistent with
+a plausible bed.
+
+### SMB-driven reconstruction
+
+The dual of `solve`: drive the geometry with an SMB instead of a yield stress, on the same
+fixed margin (see [Algorithms §9](algorithms.qmd#sec-reconstruct)).
+
+```julia
+z_s, H = diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding)
+```
+
+::: {.callout-warning}
+The outer iteration is non-contractive (like `:full`) and is under-relaxed; the default
+`relax = 0.05` converges the test configurations, but stiffer or finer grids need a smaller
+`relax` and more `n_outer`. A complete free-margin steady state is out of scope — use a
+dynamic model (e.g. [Yelmo](https://github.com/palma-ice/yelmo)) for that.
+:::
+
 ## Inverting for $\tau_b$
 
 The solver is differentiable with respect to $\tau_b$. See [Algorithms §7](algorithms.qmd#sec-ad)
