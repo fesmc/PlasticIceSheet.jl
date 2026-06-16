@@ -213,6 +213,13 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#diagnostics" id="toc-diagnostics" class="nav-link" data-scroll-target="#diagnostics">Diagnostics</a></li>
   </ul></li>
+  <li><a href="#velocity-and-surface-mass-balance" id="toc-velocity-and-surface-mass-balance" class="nav-link" data-scroll-target="#velocity-and-surface-mass-balance">Velocity and surface mass balance</a>
+  <ul class="collapse">
+  <li><a href="#closure-b-velocity-then-implied-smb" id="toc-closure-b-velocity-then-implied-smb" class="nav-link" data-scroll-target="#closure-b-velocity-then-implied-smb">Closure B — velocity, then implied SMB</a></li>
+  <li><a href="#closure-a-balance-velocity-from-a-prescribed-smb" id="toc-closure-a-balance-velocity-from-a-prescribed-smb" class="nav-link" data-scroll-target="#closure-a-balance-velocity-from-a-prescribed-smb">Closure A — balance velocity from a prescribed SMB</a></li>
+  <li><a href="#consistency-the-implied-bed" id="toc-consistency-the-implied-bed" class="nav-link" data-scroll-target="#consistency-the-implied-bed">Consistency — the implied bed</a></li>
+  <li><a href="#smb-driven-reconstruction" id="toc-smb-driven-reconstruction" class="nav-link" data-scroll-target="#smb-driven-reconstruction">SMB-driven reconstruction</a></li>
+  </ul></li>
   <li><a href="#inverting-for-tau_b" id="toc-inverting-for-tau_b" class="nav-link" data-scroll-target="#inverting-for-tau_b">Inverting for <span class="math inline">\tau_b</span></a>
   <ul class="collapse">
   <li><a href="#forward-mode-scalar-low-dimensional-tau_b" id="toc-forward-mode-scalar-low-dimensional-tau_b" class="nav-link" data-scroll-target="#forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></a></li>
@@ -300,22 +307,66 @@ window.Quarto = {
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">surface_misfit</span>(z_s, z_s_obs, mask)   <span class="co"># mean-squared surface misfit over ice</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
+<section id="velocity-and-surface-mass-balance" class="level2">
+<h2 class="anchored" data-anchor-id="velocity-and-surface-mass-balance">Velocity and surface mass balance</h2>
+<p>The plastic solve returns only geometry. A <strong>DIVA closure</strong> layered on the fixed geometry recovers a depth-averaged velocity and a first-order SMB — see <a href="./algorithms.html#sec-closures">Algorithms §8</a> for the theory. Pick a rheology and a sliding law:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>rheology <span class="op">=</span> <span class="fu">GlenRheology</span>(A <span class="op">=</span> <span class="fl">1.0e-16</span>, n <span class="op">=</span> <span class="fl">3.0</span>)           <span class="co"># isothermal Glen</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>sliding  <span class="op">=</span> <span class="fu">WeertmanSliding</span>(β <span class="op">=</span> <span class="fl">1.0e4</span>, m <span class="op">=</span> <span class="fl">3.0</span>)          <span class="co"># also LinearSliding(β),</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>                                                        <span class="co"># RegularizedCoulomb(C, u_0, m)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="closure-b-velocity-then-implied-smb" class="level3">
+<h3 class="anchored" data-anchor-id="closure-b-velocity-then-implied-smb">Closure B — velocity, then implied SMB</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>vel <span class="op">=</span> <span class="fu">diva_velocity</span>(z_s, H, τ_b, mask, dx, dy; rheology, sliding)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># named tuple: ux, uy, speed, u_b (sliding), u_def (deformation), ex, ey (flow direction)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>smb <span class="op">=</span> <span class="fu">smb_from_velocity</span>(vel, H, z_s, mask, dx, dy)      <span class="co"># ḃ = ∇·(ūH)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>RegularizedCoulomb</code> returns a <code>NaN</code> basal speed wherever <code>τ_b ≥ C</code> (bed at the Coulomb cap, sliding speed undetermined) — those cells should take their speed from closure A.</p>
+</section>
+<section id="closure-a-balance-velocity-from-a-prescribed-smb" class="level3">
+<h3 class="anchored" data-anchor-id="closure-a-balance-velocity-from-a-prescribed-smb">Closure A — balance velocity from a prescribed SMB</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>bal <span class="op">=</span> <span class="fu">balance_velocity</span>(z_s, H, mask, smb, dx, dy)       <span class="co"># named tuple: speed, ux, uy, Q, ...</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>balance_flux</code> (routing) is the exact inverse of <code>smb_from_velocity</code>, so feeding closure B’s SMB back through closure A recovers closure B’s velocity to machine precision.</p>
+</section>
+<section id="consistency-the-implied-bed" class="level3">
+<h3 class="anchored" data-anchor-id="consistency-the-implied-bed">Consistency — the implied bed</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ib <span class="op">=</span> <span class="fu">implied_basal_velocity</span>(z_s, H, τ_b, mask, smb, dx, dy; rheology)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># u_basal = u_balance − u_def: the basal velocity the geometry + SMB demand</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Inverting a sliding law at <code>ib.u_basal</code> and the local <code>τ_b</code> gives the friction implied by the reconstruction — a check on whether the geometry and assumed climate are consistent with a plausible bed.</p>
+</section>
+<section id="smb-driven-reconstruction" class="level3">
+<h3 class="anchored" data-anchor-id="smb-driven-reconstruction">SMB-driven reconstruction</h3>
+<p>The dual of <code>solve</code>: drive the geometry with an SMB instead of a yield stress, on the same fixed margin (see <a href="./algorithms.html#sec-reconstruct">Algorithms §9</a>).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">diva_reconstruct</span>(z_b, mask, smb, dx, dy; rheology, sliding)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The outer iteration is non-contractive (like <code>:full</code>) and is under-relaxed; the default <code>relax = 0.05</code> converges the test configurations, but stiffer or finer grids need a smaller <code>relax</code> and more <code>n_outer</code>. A complete free-margin steady state is out of scope — use a dynamic model (e.g.&nbsp;<a href="https://github.com/palma-ice/yelmo">Yelmo</a>) for that.</p>
+</div>
+</div>
+</section>
+</section>
 <section id="inverting-for-tau_b" class="level2">
 <h2 class="anchored" data-anchor-id="inverting-for-tau_b">Inverting for <span class="math inline">\tau_b</span></h2>
 <p>The solver is differentiable with respect to <span class="math inline">\tau_b</span>. See <a href="./algorithms.html#sec-ad">Algorithms §7</a> for the theory.</p>
 <section id="forward-mode-scalar-low-dimensional-tau_b" class="level3">
 <h3 class="anchored" data-anchor-id="forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ForwardDiff</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> ForwardDiff.<span class="fu">derivative</span>(loss, <span class="fl">1.0e5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ForwardDiff</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> ForwardDiff.<span class="fu">derivative</span>(loss, <span class="fl">1.0e5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="reverse-mode-full-per-cell-tau_b-field" class="level3">
 <h3 class="anchored" data-anchor-id="reverse-mode-full-per-cell-tau_b-field">Reverse mode — full per-cell <span class="math inline">\tau_b</span> field</h3>
 <p>Load the extension triggers, then differentiate <code>differentiable_thickness</code> with any reverse-mode AD:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ImplicitDifferentiation</span>, <span class="bu">ADTypes</span>, <span class="bu">ForwardDiff</span>, <span class="bu">Zygote</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ_b, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ_b)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ_b field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ImplicitDifferentiation</span>, <span class="bu">ADTypes</span>, <span class="bu">ForwardDiff</span>, <span class="bu">Zygote</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ_b, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ_b)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ_b field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>A complete, runnable Adam-based recovery of a spatially-varying <span class="math inline">\tau_b</span> from an observed surface is in <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a>. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.</p>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -334,11 +385,11 @@ Tip
 </section>
 <section id="netcdf-io" class="level2">
 <h2 class="anchored" data-anchor-id="netcdf-io">NetCDF I/O</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">NCDatasets</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ_b, mask, dx, dy, x, y)</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">NCDatasets</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ_b, mask, dx, dy, x, y)</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="caveats" class="level2">
 <h2 class="anchored" data-anchor-id="caveats">Caveats</h2>

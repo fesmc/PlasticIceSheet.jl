@@ -191,7 +191,16 @@ window.Quarto = {
   <li><a href="#forward-mode" id="toc-forward-mode" class="nav-link" data-scroll-target="#forward-mode">Forward mode</a></li>
   <li><a href="#reverse-mode-implicit-differentiation" id="toc-reverse-mode-implicit-differentiation" class="nav-link" data-scroll-target="#reverse-mode-implicit-differentiation">Reverse mode (implicit differentiation)</a></li>
   </ul></li>
-  <li><a href="#what-was-deliberately-dropped" id="toc-what-was-deliberately-dropped" class="nav-link" data-scroll-target="#what-was-deliberately-dropped">8. What was deliberately dropped</a></li>
+  <li><a href="#sec-closures" id="toc-sec-closures" class="nav-link" data-scroll-target="#sec-closures">8. Velocity and surface mass balance</a>
+  <ul class="collapse">
+  <li><a href="#the-geometry-already-fixes-the-flow-direction" id="toc-the-geometry-already-fixes-the-flow-direction" class="nav-link" data-scroll-target="#the-geometry-already-fixes-the-flow-direction">The geometry already fixes the flow direction</a></li>
+  <li><a href="#sec-closureB" id="toc-sec-closureB" class="nav-link" data-scroll-target="#sec-closureB">Closure B — parameters → velocity → SMB</a></li>
+  <li><a href="#sec-closureA" id="toc-sec-closureA" class="nav-link" data-scroll-target="#sec-closureA">Closure A — SMB → velocity</a></li>
+  <li><a href="#sec-mfd" id="toc-sec-mfd" class="nav-link" data-scroll-target="#sec-mfd">One discrete flux operator</a></li>
+  <li><a href="#consistency-where-a-and-b-meet" id="toc-consistency-where-a-and-b-meet" class="nav-link" data-scroll-target="#consistency-where-a-and-b-meet">Consistency: where A and B meet</a></li>
+  </ul></li>
+  <li><a href="#sec-reconstruct" id="toc-sec-reconstruct" class="nav-link" data-scroll-target="#sec-reconstruct">9. SMB-driven reconstruction</a></li>
+  <li><a href="#what-was-deliberately-dropped" id="toc-what-was-deliberately-dropped" class="nav-link" data-scroll-target="#what-was-deliberately-dropped">10. What was deliberately dropped</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -288,6 +297,36 @@ window.Quarto = {
 <td><span class="math inline">G \equiv 2\tau_b/(\rho_i g)</span></td>
 <td>—</td>
 <td>flat-bed eikonal right-hand side (m)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\bar{\mathbf u}</span></td>
+<td><code>ū</code></td>
+<td>depth-averaged horizontal velocity (m yr⁻¹)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">u_b,\ u_d</span></td>
+<td><code>u_b, u_def</code></td>
+<td>basal-sliding / internal-deformation speed</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">A,\ n</span></td>
+<td><code>A, n</code></td>
+<td>Glen rate factor / exponent</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\beta</span></td>
+<td><code>β</code></td>
+<td>sliding-law coefficient</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\dot b</span></td>
+<td><code>smb</code></td>
+<td>surface mass balance (m yr⁻¹)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\mathbf q = \bar{\mathbf u} H</span></td>
+<td><code>Q</code></td>
+<td>vertically-integrated ice flux</td>
 </tr>
 </tbody>
 </table>
@@ -416,8 +455,71 @@ r_{i,j}(w, \tau_b) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
 </div>
 </section>
 </section>
+<section id="sec-closures" class="level2">
+<h2 class="anchored" data-anchor-id="sec-closures">8. Velocity and surface mass balance</h2>
+<p>The plastic solve returns <em>geometry</em> and nothing else. By taking the perfectly-plastic (<span class="math inline">n\to\infty</span>) limit it has discarded exactly the rate-dependent information that a rate factor, a velocity, and a surface mass balance (SMB) live in — the shape is rate-independent by construction. Those quantities are not hidden in the solution waiting to be read off; recovering them requires <em>one extra closure</em> layered on the fixed geometry.</p>
+<section id="the-geometry-already-fixes-the-flow-direction" class="level3">
+<h3 class="anchored" data-anchor-id="the-geometry-already-fixes-the-flow-direction">The geometry already fixes the flow direction</h3>
+<p>The plastic balance <a href="#eq-plastic-stress" class="quarto-xref">Equation&nbsp;3</a> is the <strong>membrane-free limit of the SSA/DIVA momentum balance</strong>: with <span class="math inline">\tau_d=\tau_b</span> and the basal drag opposing flow, the longitudinal-stress-divergence term vanishes. Two consequences follow. First, the velocity is <em>local and analytical</em> — no elliptic solve. Second, ice flows down the surface gradient, along the characteristics of the eikonal, so the direction is known everywhere:</p>
+<p><span id="eq-flowdir"><span class="math display">
+\hat{\mathbf u} = -\,\frac{\nabla z_s}{|\nabla z_s|}.
+\tag{7}</span></span></p>
+<p>What the geometry does <strong>not</strong> fix is the flux magnitude — a plastic bed sets the direction but not the speed. Closing that gap needs one assumption, and there are two dual ways to make it.</p>
+</section>
+<section id="sec-closureB" class="level3">
+<h3 class="anchored" data-anchor-id="sec-closureB">Closure B — parameters → velocity → SMB</h3>
+<p>Assume a rheology and a sliding law. The depth-averaged speed splits into internal deformation and basal sliding, both evaluated at the local driving stress <span class="math inline">\tau=\tau_b</span>:</p>
+<p><span id="eq-diva-speed"><span class="math display">
+|\bar{\mathbf u}| = \underbrace{u_b(\tau_b)}_{\text{sliding law}}
+\;+\; \underbrace{\frac{2A}{n+2}\,\tau_b^{\,n}\,H}_{\text{SIA deformation}} .
+\tag{8}</span></span></p>
+<p>The deformational term is the SIA closed form with the plastic constraint <span class="math inline">\tau_d=\tau_b</span> substituted; the sliding term inverts the chosen law for the speed that produces drag <span class="math inline">\tau_b</span> (<code>basal_velocity</code>). For a regularized-Coulomb bed at its Coulomb cap the sliding speed is genuinely undetermined and is returned as <code>NaN</code> rather than fabricated. With <span class="math inline">\bar{\mathbf u}=|\bar{\mathbf u}|\,\hat{\mathbf u}</span> in hand, steady-state mass continuity gives the implied SMB as a flux divergence:</p>
+<p><span id="eq-smbB"><span class="math display">
+\dot b = \nabla\!\cdot\mathbf q = \nabla\!\cdot(\bar{\mathbf u}\,H).
+\tag{9}</span></span></p>
+<p>This is <code>diva_velocity</code> followed by <code>smb_from_velocity</code>. Because the velocity is a smooth function of <span class="math inline">\tau_b</span>, so is the SMB — the whole closure doubles as an observation operator for <span class="math inline">\tau_b</span> inversion (§7).</p>
+</section>
+<section id="sec-closureA" class="level3">
+<h3 class="anchored" data-anchor-id="sec-closureA">Closure A — SMB → velocity</h3>
+<p>The dual. Prescribe <span class="math inline">\dot b</span> and route it down the fixed surface to recover the flux the ice <em>must</em> carry to be in steady state — the <strong>balance velocity</strong> (Budd &amp; Warner 1996):</p>
+<p><span id="eq-smbA"><span class="math display">
+\nabla\!\cdot\mathbf q = \dot b, \qquad \mathbf q \parallel \hat{\mathbf u}, \qquad
+|\bar{\mathbf u}| = \frac{|\mathbf q|}{H}.
+\tag{10}</span></span></p>
+<p>This is the rigorous reading when <span class="math inline">\tau_b</span> is a basal sliding resistance, where the speed is non-local — set by upstream accumulation, not local rheology. It is <code>balance_flux</code> / <code>balance_velocity</code>.</p>
+</section>
+<section id="sec-mfd" class="level3">
+<h3 class="anchored" data-anchor-id="sec-mfd">One discrete flux operator</h3>
+<p>Closures A and B are exact inverses <em>in the continuum</em>, and the implementation preserves that <strong>discretely</strong>. Both are built on a single finite-volume <strong>multiple-flow-direction (MFD)</strong> operator: a cell’s throughput is partitioned to its lower grounded neighbours in proportion to their surface drop. The routing (<code>balance_flux</code>, source → throughput) and the implied-SMB divergence (<code>smb_from_velocity</code>, throughput → source) use the <em>same</em> weights, so they are adjoint and</p>
+<p><span class="math display">
+\texttt{balance\_flux}\bigl(\texttt{smb\_from\_velocity}(\bar{\mathbf u})\bigr) = \bar{\mathbf u}\,H
+</span></p>
+<p>holds to machine precision. Routing processes cells from highest surface to lowest, so every upstream contribution has arrived before a cell distributes its throughput; flux delivered to the margin terminates there (the catchment discharge), and mass is conserved exactly. This consistency is not cosmetic — it is what makes the SMB-driven reconstruction (§9) have a clean fixed point.</p>
+</section>
+<section id="consistency-where-a-and-b-meet" class="level3">
+<h3 class="anchored" data-anchor-id="consistency-where-a-and-b-meet">Consistency: where A and B meet</h3>
+<p>Subtracting the analytical deformation <a href="#eq-diva-speed" class="quarto-xref">Equation&nbsp;8</a> from the balance speed <a href="#eq-smbA" class="quarto-xref">Equation&nbsp;10</a> leaves the basal velocity the geometry and SMB jointly demand,</p>
+<p><span id="eq-consistency"><span class="math display">
+u_{\text{basal}} = u_{\text{balance}} - u_d,
+\tag{11}</span></span></p>
+<p>(<code>implied_basal_velocity</code>). Inverting a sliding law at this <span class="math inline">u_{\text{basal}}</span> and the local <span class="math inline">\tau_b</span> gives the bed friction implied by the reconstruction — a check on whether the plastic geometry plus an assumed climate is consistent with a plausible bed. A negative value flags a cell where the balance flux is smaller than internal deformation alone would carry.</p>
+</section>
+</section>
+<section id="sec-reconstruct" class="level2">
+<h2 class="anchored" data-anchor-id="sec-reconstruct">9. SMB-driven reconstruction</h2>
+<p>Closures A and B read quantities <em>off</em> a geometry. Their machinery also supports the dual of <code>solve</code> itself: reconstruct the geometry <strong>driven by an SMB</strong> instead of a prescribed yield stress, on the same prescribed margin (<code>diva_reconstruct</code>). This is the plastic solver with <span class="math inline">\tau_b</span> no longer prescribed but <em>derived</em> each iteration:</p>
+<ol type="1">
+<li>route <span class="math inline">\dot b</span> down the current surface for the required throughput <span class="math inline">\mathbf q</span> (§8);</li>
+<li>invert the DIVA flux law <a href="#eq-diva-speed" class="quarto-xref">Equation&nbsp;8</a> pointwise for the driving stress <span class="math inline">\tau_d</span> that carries it, <span class="math inline">|\mathbf q| = H\bigl(u_b(\tau_d) + \tfrac{2A}{n+2}\tau_d^{\,n}H\bigr)</span> (monotone in <span class="math inline">\tau_d</span>, solved by bisection);</li>
+<li>sweep the plastic eikonal (§4–5) with that <span class="math inline">\tau_d</span> field for an updated thickness;</li>
+<li>under-relax and repeat.</li>
+</ol>
+<p>Because routing is the exact inverse of the implied-SMB divergence (§8), a plastic solution fed its own closure-B SMB is a <strong>clean fixed point</strong>: step 1 recovers exactly <span class="math inline">\bar{\mathbf u}H</span>, step 2 returns exactly the original <span class="math inline">\tau_b</span>, and step 3 reproduces the geometry. The eikonal in step 3 also makes the thickness non-local — the interior, where the local flux-to-thickness map is singular at divides, is set by integrating inward from the margin rather than cell by cell.</p>
+<p>Like the <code>:full</code> outer iteration (§3), the “route, re-invert, re-sweep” map is <strong>not contractive</strong> and must be under-relaxed (<a href="#eq-hj" class="quarto-xref">Equation&nbsp;6</a>’s damping, here with default <span class="math inline">\alpha=\texttt{relax}=0.05</span>). Stiffer or finer grids trade a smaller <span class="math inline">\alpha</span> for more iterations.</p>
+<p>This is the lighter middle path between the plastic reconstruction (margin and yield stress in, geometry out; SMB-agnostic) and a full thermomechanical model: it stays a plastic-style geometry solver but is driven by climate. A complete free-margin, nonlinear-diffusion steady state is deliberately <em>not</em> attempted here — that is the job of a dynamic model such as <a href="https://github.com/palma-ice/yelmo">Yelmo</a>.</p>
+</section>
 <section id="what-was-deliberately-dropped" class="level2">
-<h2 class="anchored" data-anchor-id="what-was-deliberately-dropped">8. What was deliberately dropped</h2>
+<h2 class="anchored" data-anchor-id="what-was-deliberately-dropped">10. What was deliberately dropped</h2>
 <p>Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline. See the <a href="./PLAN.html">Design notes</a> for the full accounting.</p>
 
 

@@ -251,6 +251,7 @@ window.Quarto = {
 |\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
 </span></p>
 <p>This is a static <strong>Hamilton–Jacobi (eikonal) equation</strong>. Solving it with an upwind grid scheme means saddles, domes, and coalescing ice caps emerge automatically from the viscosity solution — there is no flowline tracing, crossover detection, or saddle bookkeeping. See <a href="./algorithms.html">Algorithms</a> for the full derivation and numerics.</p>
+<p>An optional <strong>DIVA closure</strong> layered on the fixed geometry recovers what perfect plasticity discards — a depth-averaged velocity and a first-order surface mass balance — and its dual can drive the geometry <em>from</em> an SMB instead of a yield stress (<a href="./algorithms.html#sec-closures">Algorithms §8–9</a>).</p>
 </section>
 <section id="quick-start" class="level2">
 <h2 class="anchored" data-anchor-id="quick-start">Quick start</h2>
