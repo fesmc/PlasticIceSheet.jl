@@ -208,7 +208,7 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#the-idea-in-one-equation" id="toc-the-idea-in-one-equation" class="nav-link active" data-scroll-target="#the-idea-in-one-equation">The idea in one equation</a></li>
+  <li><a href="#the-idea" id="toc-the-idea" class="nav-link active" data-scroll-target="#the-idea">The idea</a></li>
   <li><a href="#quick-start" id="toc-quick-start" class="nav-link" data-scroll-target="#quick-start">Quick start</a></li>
   <li><a href="#origin" id="toc-origin" class="nav-link" data-scroll-target="#origin">Origin</a></li>
   </ul>
@@ -240,13 +240,13 @@ window.Quarto = {
 <p><code>PlasticIceSheet.jl</code> reconstructs a perfectly-plastic, steady-state ice sheet from three inputs — a grounded-ice <strong>margin/mask</strong>, a <strong>bed elevation</strong> <span class="math inline">z_b</span>, and a <strong>basal shear stress</strong> field <span class="math inline">\tau_b</span> — and returns a glaciologically plausible ice <strong>surface</strong> <span class="math inline">z_s</span> and <strong>thickness</strong> <span class="math inline">H</span>. There is no time-stepping, no climate, and no ice dynamics.</p>
 <p>It is a clean-room simplification and modernization of <strong>ICESHEET 2.0</strong> by Evan Gowan and colleagues — <a href="https://github.com/evangowan/icesheet">source code</a>, the method’s description paper (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al., 2016, <em>Geosci. Model Dev.</em></a>), and its global application to the past 80,000 years (<a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al., 2021, <em>Nat. Commun.</em></a>). The core physics — a single published equation — is retained, while ICESHEET’s recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver (see <a href="#origin">Origin</a>).</p>
 <p>It is meant as a <em>complementary first-guess tool</em> next to a full dynamic model (e.g. <a href="https://github.com/palma-ice/yelmo">Yelmo</a>) and an independent GIA / sea-level solver: to seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.</p>
-<section id="the-idea-in-one-equation" class="level2">
-<h2 class="anchored" data-anchor-id="the-idea-in-one-equation">The idea in one equation</h2>
-<p>Under a perfectly-plastic, steady-state assumption, the <strong>basal shear stress</strong> <span class="math inline">\tau_b</span> balances the gravitational driving stress everywhere — for surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>:</p>
+<section id="the-idea" class="level2">
+<h2 class="anchored" data-anchor-id="the-idea">The idea</h2>
+<p>Under a perfectly-plastic, steady-state assumption, the <strong>basal shear stress</strong> <span class="math inline">\tau_b</span> balances the gravitational <strong>driving stress</strong> <span class="math inline">\tau_d</span> everywhere:</p>
 <p><span class="math display">
-\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
+\tau_b = \tau_d .
 </span></p>
-<p>Given a prescribed <span class="math inline">\tau_b</span>, rearranging for the surface slope gives the equation we solve:</p>
+<p>The driving stress is fixed by the ice geometry — for surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>, <span class="math inline">\tau_d = \rho_i\, g\, H\, |\nabla z_s|</span> — so the prescribed <span class="math inline">\tau_b</span> relates to the surface as <span class="math inline">\tau_b = \rho_i\, g\, H\, |\nabla z_s|</span>. Rearranging for the surface slope gives the equation we solve:</p>
 <p><span class="math display">
 |\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
 </span></p>

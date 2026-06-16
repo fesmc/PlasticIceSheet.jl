@@ -171,9 +171,9 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="the-physics-we-keep" class="level2">
 <h2 class="anchored" data-anchor-id="the-physics-we-keep">The physics we keep</h2>
-<p>The entire scientific content of ICESHEET is one equation. Under the perfectly-plastic, steady-state assumption the basal shear stress <code>τ_b</code> balances the driving stress (paper Eq. 5):</p>
-<pre><code>τ_b = ρ_i g H |∇z_s|,    H = z_s − z_b ≥ 0</code></pre>
-<p>with <code>z_s</code> the ice surface elevation, <code>z_b</code> the bed elevation, <code>H</code> the thickness, <code>τ_b</code> the basal shear stress, <code>ρ_i</code> ice density, <code>g</code> gravity. With <code>τ_b</code> prescribed, rearrange for the surface slope to get the form we solve:</p>
+<p>The entire scientific content of ICESHEET is one equation. Under the perfectly-plastic, steady-state assumption the basal shear stress <code>τ_b</code> balances the gravitational driving stress <code>τ_d</code> (paper Eq. 5):</p>
+<pre><code>τ_b = τ_d = ρ_i g H |∇z_s|,    H = z_s − z_b ≥ 0</code></pre>
+<p>with <code>z_s</code> the ice surface elevation, <code>z_b</code> the bed elevation, <code>H</code> the thickness, <code>τ_b</code> the basal shear stress, <code>τ_d</code> the driving stress, <code>ρ_i</code> ice density, <code>g</code> gravity. With <code>τ_b</code> prescribed, rearrange for the surface slope to get the form we solve:</p>
 <pre><code>|∇z_s| = τ_b / (ρ_i g H) = τ_b / (ρ_i g (z_s − z_b))</code></pre>
 <p>Boundary condition: <code>H = 0</code> (<code>z_s = z_b</code>) at the margin, plus a marine flotation thickness <code>H_flt = (ρ_w/ρ_i)(z_ss − z_b)</code> where the grounded margin sits below sea level <code>z_ss</code>.</p>
 <p>This is a <strong>static Hamilton–Jacobi equation</strong>. The viscosity solution of an upwind grid scheme automatically produces the correct surface where flow would converge — so <strong>saddles, domes, and coalescing ice caps emerge for free</strong>, with no flowline tracing.</p>
