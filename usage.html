@@ -213,10 +213,10 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#diagnostics" id="toc-diagnostics" class="nav-link" data-scroll-target="#diagnostics">Diagnostics</a></li>
   </ul></li>
-  <li><a href="#inverting-for-tau" id="toc-inverting-for-tau" class="nav-link" data-scroll-target="#inverting-for-tau">Inverting for <span class="math inline">\tau</span></a>
+  <li><a href="#inverting-for-tau_b" id="toc-inverting-for-tau_b" class="nav-link" data-scroll-target="#inverting-for-tau_b">Inverting for <span class="math inline">\tau_b</span></a>
   <ul class="collapse">
-  <li><a href="#forward-mode-scalar-low-dimensional-tau" id="toc-forward-mode-scalar-low-dimensional-tau" class="nav-link" data-scroll-target="#forward-mode-scalar-low-dimensional-tau">Forward mode — scalar / low-dimensional <span class="math inline">\tau</span></a></li>
-  <li><a href="#reverse-mode-full-per-cell-tau-field" id="toc-reverse-mode-full-per-cell-tau-field" class="nav-link" data-scroll-target="#reverse-mode-full-per-cell-tau-field">Reverse mode — full per-cell <span class="math inline">\tau</span> field</a></li>
+  <li><a href="#forward-mode-scalar-low-dimensional-tau_b" id="toc-forward-mode-scalar-low-dimensional-tau_b" class="nav-link" data-scroll-target="#forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></a></li>
+  <li><a href="#reverse-mode-full-per-cell-tau_b-field" id="toc-reverse-mode-full-per-cell-tau_b-field" class="nav-link" data-scroll-target="#reverse-mode-full-per-cell-tau_b-field">Reverse mode — full per-cell <span class="math inline">\tau_b</span> field</a></li>
   </ul></li>
   <li><a href="#netcdf-io" id="toc-netcdf-io" class="nav-link" data-scroll-target="#netcdf-io">NetCDF I/O</a></li>
   <li><a href="#caveats" id="toc-caveats" class="nav-link" data-scroll-target="#caveats">Caveats</a></li>
@@ -255,7 +255,7 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="solving">Solving</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">PlasticIceSheet</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>hj)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ_b, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>full)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 50%">
@@ -273,7 +273,7 @@ window.Quarto = {
 <td>bed elevation <span class="math inline">z_b</span> (m), <code>nx × ny</code> matrix</td>
 </tr>
 <tr class="even">
-<td><code>τ</code></td>
+<td><code>τ_b</code></td>
 <td>basal shear stress (Pa); a scalar is broadcast to a uniform field</td>
 </tr>
 <tr class="odd">
@@ -288,9 +288,9 @@ window.Quarto = {
 </table>
 <p>Key options (see the docstring for the rest):</p>
 <ul>
-<li><code>mode</code> — <code>:hj</code> (default, full Hamilton–Jacobi over arbitrary relief) or <code>:flat</code> (flat-bed eikonal, cheapest; exact when relief ≪ thickness).</li>
+<li><code>mode</code> — <code>:full</code> (default, full Hamilton–Jacobi over arbitrary relief) or <code>:flat</code> (flat-bed eikonal, cheapest; exact when relief ≪ thickness).</li>
 <li><code>params</code> — a <code>PlasticParams</code> (densities <code>ρ_i</code>/<code>ρ_w</code>, gravity <code>g</code>, sea level <code>z_ss</code>, <code>H_min</code>).</li>
-<li><code>n_outer</code>, <code>outer_tol</code>, <code>relax</code> — <code>:hj</code> damped fixed-point controls. <code>relax</code> ∈ (0,1] is the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.</li>
+<li><code>n_outer</code>, <code>outer_tol</code>, <code>relax</code> — <code>:full</code> damped fixed-point controls. <code>relax</code> ∈ (0,1] is the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.</li>
 </ul>
 <p>Returns <code>(z_s, H)</code> — surface elevation <span class="math inline">z_s</span> and thickness <span class="math inline">H</span>; ice-free cells have <code>H = 0</code>, <code>z_s = z_b</code>.</p>
 <section id="diagnostics" class="level3">
@@ -300,23 +300,23 @@ window.Quarto = {
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">surface_misfit</span>(z_s, z_s_obs, mask)   <span class="co"># mean-squared surface misfit over ice</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
-<section id="inverting-for-tau" class="level2">
-<h2 class="anchored" data-anchor-id="inverting-for-tau">Inverting for <span class="math inline">\tau</span></h2>
-<p>The solver is differentiable with respect to <span class="math inline">\tau</span>. See <a href="./algorithms.html#differentiating-with-respect-to">Algorithms §7</a> for the theory.</p>
-<section id="forward-mode-scalar-low-dimensional-tau" class="level3">
-<h3 class="anchored" data-anchor-id="forward-mode-scalar-low-dimensional-tau">Forward mode — scalar / low-dimensional <span class="math inline">\tau</span></h3>
+<section id="inverting-for-tau_b" class="level2">
+<h2 class="anchored" data-anchor-id="inverting-for-tau_b">Inverting for <span class="math inline">\tau_b</span></h2>
+<p>The solver is differentiable with respect to <span class="math inline">\tau_b</span>. See <a href="./algorithms.html#sec-ad">Algorithms §7</a> for the theory.</p>
+<section id="forward-mode-scalar-low-dimensional-tau_b" class="level3">
+<h3 class="anchored" data-anchor-id="forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ForwardDiff</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ, mask; dx, dy)), z_s_obs, mask)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> ForwardDiff.<span class="fu">derivative</span>(loss, <span class="fl">1.0e5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="reverse-mode-full-per-cell-tau-field" class="level3">
-<h3 class="anchored" data-anchor-id="reverse-mode-full-per-cell-tau-field">Reverse mode — full per-cell <span class="math inline">\tau</span> field</h3>
+<section id="reverse-mode-full-per-cell-tau_b-field" class="level3">
+<h3 class="anchored" data-anchor-id="reverse-mode-full-per-cell-tau_b-field">Reverse mode — full per-cell <span class="math inline">\tau_b</span> field</h3>
 <p>Load the extension triggers, then differentiate <code>differentiable_thickness</code> with any reverse-mode AD:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ImplicitDifferentiation</span>, <span class="bu">ADTypes</span>, <span class="bu">ForwardDiff</span>, <span class="bu">Zygote</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A complete, runnable Adam-based recovery of a spatially-varying <span class="math inline">\tau</span> from an observed surface is in <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a>. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.</p>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ_b, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ_b)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ_b field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A complete, runnable Adam-based recovery of a spatially-varying <span class="math inline">\tau_b</span> from an observed surface is in <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a>. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.</p>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -336,16 +336,16 @@ Tip
 <h2 class="anchored" data-anchor-id="netcdf-io">NetCDF I/O</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">NCDatasets</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ, mask, dx, dy, x, y)</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ, inp.mask; inp.dx, inp.dy)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ_b, mask, dx, dy, x, y)</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)</span>
 <span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="caveats" class="level2">
 <h2 class="anchored" data-anchor-id="caveats">Caveats</h2>
 <ul>
 <li>Steady-state geometry only — biased thick/peaked where the real ice was streaming or dynamic (low effective driving stress the plastic assumption cannot see).</li>
-<li><span class="math inline">\tau</span> carries essentially all the uncertainty. For a first guess a constant (~50–100 kPa) or a bed-keyed value is fine; do not over-interpret the result as a constrained reconstruction.</li>
-<li>Very steep beds (relief approaching the ice thickness over a few cells) may not converge in <code>:hj</code> — see <a href="./algorithms.html#hj-mode-the-bed-gradient-correction">Algorithms §3</a>.</li>
+<li><span class="math inline">\tau_b</span> carries essentially all the uncertainty. For a first guess a constant (~50–100 kPa) or a bed-keyed value is fine; do not over-interpret the result as a constrained reconstruction.</li>
+<li>Very steep beds (relief approaching the ice thickness over a few cells) may not converge in <code>:full</code> — see <a href="./algorithms.html#sec-full">Algorithms §3</a>.</li>
 </ul>
 
 

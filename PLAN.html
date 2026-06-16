@@ -156,7 +156,7 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="plasticicesheet.jl-design-plan" class="level1">
 <h1>PlasticIceSheet.jl — design &amp; plan</h1>
-<p>A small, AD-friendly Julia package that reconstructs a perfectly-plastic, steady-state ice-sheet surface from three inputs — a <strong>grounded-ice margin/mask</strong>, a <strong>basal shear stress field</strong> <code>τ(x,y)</code>, and a <strong>bed elevation</strong> <code>z_b(x,y)</code> — by solving the governing equation as a static Hamilton–Jacobi (eikonal-type) problem on a grid.</p>
+<p>A small, AD-friendly Julia package that reconstructs a perfectly-plastic, steady-state ice-sheet surface from three inputs — a <strong>grounded-ice margin/mask</strong>, a <strong>basal shear stress field</strong> <code>τ_b(x,y)</code>, and a <strong>bed elevation</strong> <code>z_b(x,y)</code> — by solving the governing equation as a static Hamilton–Jacobi (eikonal-type) problem on a grid.</p>
 <p>It is intended as a <em>complementary first-guess tool</em> alongside a full dynamic model (Yelmo) and an independent 3-D GIA / sea-level solver — e.g.&nbsp;to seed spin-up, to provide an elevation field for an SMB model, or as a relaxation target. It is <strong>not</strong> a dynamic model and carries no transient, thermomechanics, or ice-shelf physics.</p>
 <section id="origin" class="level2">
 <h2 class="anchored" data-anchor-id="origin">Origin</h2>
@@ -171,18 +171,20 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="the-physics-we-keep" class="level2">
 <h2 class="anchored" data-anchor-id="the-physics-we-keep">The physics we keep</h2>
-<p>The entire scientific content of ICESHEET is one equation — the perfectly-plastic, steady-state ice surface, where driving stress balances basal shear stress everywhere (paper Eq. 5):</p>
-<pre><code>|∇z_s| = τ / (ρ_i g (z_s − z_b)) = τ / (ρ_i g H),    H = z_s − z_b ≥ 0</code></pre>
-<p>with <code>z_s</code> the ice surface elevation, <code>z_b</code> the bed elevation, <code>H</code> the thickness, <code>τ</code> the basal shear stress, <code>ρ_i</code> ice density, <code>g</code> gravity. Boundary condition: <code>H = 0</code> (<code>z_s = z_b</code>) at the margin, plus a marine flotation thickness <code>H_flt = (ρ_w/ρ_i)(z_ss − z_b)</code> where the grounded margin sits below sea level <code>z_ss</code>.</p>
+<p>The entire scientific content of ICESHEET is one equation. Under the perfectly-plastic, steady-state assumption the basal shear stress <code>τ_b</code> balances the driving stress (paper Eq. 5):</p>
+<pre><code>τ_b = ρ_i g H |∇z_s|,    H = z_s − z_b ≥ 0</code></pre>
+<p>with <code>z_s</code> the ice surface elevation, <code>z_b</code> the bed elevation, <code>H</code> the thickness, <code>τ_b</code> the basal shear stress, <code>ρ_i</code> ice density, <code>g</code> gravity. With <code>τ_b</code> prescribed, rearrange for the surface slope to get the form we solve:</p>
+<pre><code>|∇z_s| = τ_b / (ρ_i g H) = τ_b / (ρ_i g (z_s − z_b))</code></pre>
+<p>Boundary condition: <code>H = 0</code> (<code>z_s = z_b</code>) at the margin, plus a marine flotation thickness <code>H_flt = (ρ_w/ρ_i)(z_ss − z_b)</code> where the grounded margin sits below sea level <code>z_ss</code>.</p>
 <p>This is a <strong>static Hamilton–Jacobi equation</strong>. The viscosity solution of an upwind grid scheme automatically produces the correct surface where flow would converge — so <strong>saddles, domes, and coalescing ice caps emerge for free</strong>, with no flowline tracing.</p>
 <section id="two-solve-modes" class="level3">
 <h3 class="anchored" data-anchor-id="two-solve-modes">Two solve modes</h3>
 <ol type="1">
 <li><p><strong><code>:flat</code> — flat-bed eikonal (simple case).</strong> Neglect bed slope in the flux (<code>|∇z_s| ≈ |∇H|</code>). Substituting <code>u = H²</code> gives a textbook eikonal:</p>
-<pre><code>|∇u| = 2τ / (ρ_i g),     u = 0 at the margin</code></pre>
+<pre><code>|∇u| = 2τ_b / (ρ_i g),     u = 0 at the margin</code></pre>
 <p>Solve, then <code>H = √u</code>, <code>z_s = H + z_b</code>. Exact eikonal; ideal when bed relief ≪ ice thickness (continental interiors). The paper’s own sensitivity tests indicate the bed-gradient terms are second-order except in mountainous terrain.</p></li>
-<li><p><strong><code>:hj</code> — full Hamilton–Jacobi (default).</strong> Accounts for the bed slope <code>∇z_b</code>. The effective right-hand side (in the <code>w = H²</code> variable) is</p>
-<pre><code>|∇w| = √(G² − 4√w(∇z_b·∇w) − 4w|∇z_b|²),    G = 2τ / (ρ_i g)</code></pre>
+<li><p><strong><code>:full</code> — full Hamilton–Jacobi (default).</strong> Accounts for the bed slope <code>∇z_b</code>. The effective right-hand side (in the <code>w = H²</code> variable) is</p>
+<pre><code>|∇w| = √(G² − 4√w(∇z_b·∇w) − 4w|∇z_b|²),    G = 2τ_b / (ρ_i g)</code></pre>
 <p>which depends on <code>w</code> through <code>∇w</code>. The frozen right-hand side is re-solved as a constant-RHS eikonal and iterated to a fixed point (see Implementation notes — a <strong>damped</strong> Picard iteration is required, as the undamped map oscillates). Correct over arbitrary bed relief; reduces exactly to <code>:flat</code> when <code>∇z_b = 0</code>.</p></li>
 </ol>
 </section>
@@ -193,7 +195,7 @@ ul.task-list li input[type="checkbox"] {
 <li>Godunov update at node <code>(i,j)</code> with spacing <code>h</code>, neighbor minima <code>a, b</code>:
 <ul>
 <li>if <code>|a − b| ≥ F h</code>: <code>u = min(a, b) + F h</code></li>
-<li>else: <code>u = (a + b + √(2 F² h² − (a − b)²)) / 2</code> where <code>F = G = 2τ/(ρ_i g)</code> (flat mode) or the <code>w</code>-dependent effective RHS above (<code>:hj</code>).</li>
+<li>else: <code>u = (a + b + √(2 F² h² − (a − b)²)) / 2</code> where <code>F = G = 2τ_b/(ρ_i g)</code> (flat mode) or the <code>w</code>-dependent effective RHS above (<code>:full</code>).</li>
 </ul></li>
 </ul>
 <p>This replaces the ~2,600-line recursive flowline/crossover/saddle machinery of ICESHEET (<code>find_flowline_fisher_adaptive_4.f90</code>) with a kernel on the order of ~150–250 lines.</p>
@@ -205,31 +207,31 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li><strong>Method-of-characteristics flowline tracing</strong> and all of its bookkeeping: crossover detection / motorcycle-graph algorithm, saddle &amp; dome detection, polygon splitting, recursion, adaptive contour resampling. Subsumed by the grid HJ solver.</li>
 <li><strong>The GIA / sea-level iteration loop</strong> (CALSEA/SELEN coupling, <code>global/deform/</code>, <code>selen_format.sh</code>, …). The package consumes a bed <code>z_b</code>; the user owns GIA.</li>
-<li><strong>The GMT projection/preprocessing pipeline</strong> (<code>run.sh</code>, <code>prepare_icesheet.sh</code>, <code>create_ss_grid.f90</code>, shapefile→τ domains, <code>reduce_dem</code>, <code>nearest_int</code>, <code>bicubic</code>, <code>diff_map</code>) and the hand-rolled GMT binary-record grid reader (<code>grids.f90</code>). Replaced by in-memory arrays now, NetCDF I/O via a package extension later.</li>
+<li><strong>The GMT projection/preprocessing pipeline</strong> (<code>run.sh</code>, <code>prepare_icesheet.sh</code>, <code>create_ss_grid.f90</code>, shapefile→τ_b domains, <code>reduce_dem</code>, <code>nearest_int</code>, <code>bicubic</code>, <code>diff_map</code>) and the hand-rolled GMT binary-record grid reader (<code>grids.f90</code>). Replaced by in-memory arrays now, NetCDF I/O via a package extension later.</li>
 <li><strong>The offshore boundary Nye-smoothing pre-pass</strong> — the HJ scheme enforces the maximum surface slope intrinsically.</li>
-<li><strong>The iterative τ-tuning shell loop</strong> (<code>adjust_ss</code>) — replaced by gradient-based optimization of <code>τ</code> enabled by AD (see below).</li>
+<li><strong>The iterative τ_b-tuning shell loop</strong> (<code>adjust_ss</code>) — replaced by gradient-based optimization of <code>τ_b</code> enabled by AD (see below).</li>
 </ul>
 </section>
 <section id="what-we-keep-add" class="level2">
 <h2 class="anchored" data-anchor-id="what-we-keep-add">What we keep / add</h2>
 <ul>
-<li>Inputs: grounded-ice mask, bed <code>z_b</code>, shear-stress field <code>τ</code> (or a constant / a low-dimensional parameterization).</li>
+<li>Inputs: grounded-ice mask, bed <code>z_b</code>, shear-stress field <code>τ_b</code> (or a constant / a low-dimensional parameterization).</li>
 <li>Plastic physics + marine flotation BC at the grounding line.</li>
 <li>Gridded outputs: surface <code>z_s</code>, thickness <code>H</code>, plus reductions (volume, area).</li>
-<li><strong>AD-friendliness</strong>: the solver is written so that a scalar loss on the output (e.g.&nbsp;misfit to a target surface, or to Yelmo) can be differentiated w.r.t. <code>τ</code>, enabling gradient-based inversion of basal shear stress — the modern replacement for ICESHEET’s manual domain tuning.</li>
+<li><strong>AD-friendliness</strong>: the solver is written so that a scalar loss on the output (e.g.&nbsp;misfit to a target surface, or to Yelmo) can be differentiated w.r.t. <code>τ_b</code>, enabling gradient-based inversion of basal shear stress — the modern replacement for ICESHEET’s manual domain tuning.</li>
 </ul>
 </section>
 <section id="caveats-carried-from-the-physics" class="level2">
 <h2 class="anchored" data-anchor-id="caveats-carried-from-the-physics">Caveats (carried from the physics)</h2>
 <ul>
 <li>Steady-state geometry only; biased thick/peaked where the real ice was streaming or dynamic (low effective driving stress the plastic assumption can’t see).</li>
-<li><code>τ</code> is the free field carrying essentially all the uncertainty. For a first guess a constant (~50–100 kPa) or a bed-keyed value is fine; don’t over-interpret as a constrained reconstruction.</li>
+<li><code>τ_b</code> is the free field carrying essentially all the uncertainty. For a first guess a constant (~50–100 kPa) or a bed-keyed value is fine; don’t over-interpret as a constrained reconstruction.</li>
 </ul>
 </section>
 <section id="open-questions-decisions" class="level2">
 <h2 class="anchored" data-anchor-id="open-questions-decisions">Open questions / decisions</h2>
 <ul>
-<li><strong>AD backend &amp; strategy</strong> (forward-through-solver vs.&nbsp;implicit/adjoint at the fixed point; Enzyme vs.&nbsp;ForwardDiff vs.&nbsp;Zygote) — depends on whether <code>τ</code> is a full per-cell field or a low-dimensional parameterization. <em>To be decided before the core lands.</em></li>
+<li><strong>AD backend &amp; strategy</strong> (forward-through-solver vs.&nbsp;implicit/adjoint at the fixed point; Enzyme vs.&nbsp;ForwardDiff vs.&nbsp;Zygote) — depends on whether <code>τ_b</code> is a full per-cell field or a low-dimensional parameterization. <em>To be decided before the core lands.</em></li>
 <li><del>License</del> — decided: MIT (clean-room physics reimplementation; ICESHEET is GPL-3.0).</li>
 <li>NetCDF I/O as a package extension (<code>ext/</code>).</li>
 </ul>
@@ -237,9 +239,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="implementation-notes-v0.1" class="level2">
 <h2 class="anchored" data-anchor-id="implementation-notes-v0.1">Implementation notes (v0.1)</h2>
 <ul>
-<li><strong>Both modes solve for <code>w = H²</code></strong>, not the surface <code>z_s</code> directly: the driving slope <code>τ/(ρ_i g H)</code> blows up at the margin (<code>H→0</code>) and biases a direct-<code>z_s</code> solve low. <code>:flat</code> is the plain eikonal <code>|∇w| = 2τ/(ρ_i g)</code>; <code>:hj</code> adds the bed-gradient correction.</li>
-<li><strong><code>:hj</code> damping.</strong> The <code>:hj</code> effective RHS <code>√(G² − 4√w(∇z_b·∇w) − 4w|∇z_b|²)</code> carries <code>∇w</code>, so “freeze RHS, re-solve” is not contractive — undamped it oscillates over real relief. It is solved by a <strong>damped (under-relaxed) Picard iteration</strong> (<code>relax</code>, default 0.5). Very steep beds (relief ≈ ice thickness over a few cells) may still not converge.</li>
-<li><strong>Reverse-mode AD</strong> (<code>differentiable_thickness</code>, extension keyed on <code>ImplicitDifferentiation</code>): implicit differentiation of the converged Godunov residual <code>godunov_residual(w, τ) = 0</code>. <code>:flat</code> gradients are exact to machine precision; <code>:hj</code> gradients are exact once the damped forward solve has driven the residual to ≈ 0 (hence the firmer <code>n_outer</code>/<code>outer_tol</code> defaults on that path). The forward fast sweep is a black box; only the residual is differentiated (ForwardDiff), so AD cost is independent of sweep/outer-iteration count and scales to a full per-cell <code>τ</code> field.</li>
+<li><strong>Both modes solve for <code>w = H²</code></strong>, not the surface <code>z_s</code> directly: the driving slope <code>τ_b/(ρ_i g H)</code> blows up at the margin (<code>H→0</code>) and biases a direct-<code>z_s</code> solve low. <code>:flat</code> is the plain eikonal <code>|∇w| = 2τ_b/(ρ_i g)</code>; <code>:full</code> adds the bed-gradient correction.</li>
+<li><strong><code>:full</code> damping.</strong> The <code>:full</code> effective RHS <code>√(G² − 4√w(∇z_b·∇w) − 4w|∇z_b|²)</code> carries <code>∇w</code>, so “freeze RHS, re-solve” is not contractive — undamped it oscillates over real relief. It is solved by a <strong>damped (under-relaxed) Picard iteration</strong> (<code>relax</code>, default 0.5). Very steep beds (relief ≈ ice thickness over a few cells) may still not converge.</li>
+<li><strong>Reverse-mode AD</strong> (<code>differentiable_thickness</code>, extension keyed on <code>ImplicitDifferentiation</code>): implicit differentiation of the converged Godunov residual <code>godunov_residual(w, τ_b) = 0</code>. <code>:flat</code> gradients are exact to machine precision; <code>:full</code> gradients are exact once the damped forward solve has driven the residual to ≈ 0 (hence the firmer <code>n_outer</code>/<code>outer_tol</code> defaults on that path). The forward fast sweep is a black box; only the residual is differentiated (ForwardDiff), so AD cost is independent of sweep/outer-iteration count and scales to a full per-cell <code>τ_b</code> field.</li>
 <li><strong>NaN hygiene</strong>: <code>√w</code> is floored at <code>H_min²</code> wherever it is differentiated (<code>sqrt(0)</code> has an infinite derivative that otherwise poisons the reverse pass).</li>
 </ul>
 </section>
@@ -247,13 +249,13 @@ ul.task-list li input[type="checkbox"] {
 <h2 class="anchored" data-anchor-id="status">Status</h2>
 <ul class="task-list">
 <li><label><input type="checkbox" checked="">Package scaffolding, plan doc</label></li>
-<li><label><input type="checkbox" checked="">Core HJ / eikonal fast-sweeping solver (<code>:flat</code>, <code>:hj</code>)</label></li>
-<li><label><input type="checkbox" checked="">Forward-mode (ForwardDiff) τ-gradients, validated vs finite differences</label></li>
-<li><label><input type="checkbox" checked="">Reverse-mode (implicit-diff) full-field τ-gradients, validated vs ForwardDiff/FD</label></li>
+<li><label><input type="checkbox" checked="">Core HJ / eikonal fast-sweeping solver (<code>:flat</code>, <code>:full</code>)</label></li>
+<li><label><input type="checkbox" checked="">Forward-mode (ForwardDiff) τ_b-gradients, validated vs finite differences</label></li>
+<li><label><input type="checkbox" checked="">Reverse-mode (implicit-diff) full-field τ_b-gradients, validated vs ForwardDiff/FD</label></li>
 <li><label><input type="checkbox" checked="">Tests: Nye analytic profile, flat≡hj on flat bed, residual convergence, AD</label></li>
 <li><label><input type="checkbox" checked="">NetCDF I/O extension</label></li>
-<li><label><input type="checkbox" checked="">τ-inversion example (<code>examples/invert_tau.jl</code>)</label></li>
-<li><label><input type="checkbox">Next: implicit-diff iterative linear solver tuning for very large grids; better <code>:hj</code> convergence on steep beds (e.g.&nbsp;Anderson acceleration / a true HJ Godunov for the bed-coupled term); coordinate/projection handling for real datasets</label></li>
+<li><label><input type="checkbox" checked="">τ_b-inversion example (<code>examples/invert_tau.jl</code>)</label></li>
+<li><label><input type="checkbox">Next: implicit-diff iterative linear solver tuning for very large grids; better <code>:full</code> convergence on steep beds (e.g.&nbsp;Anderson acceleration / a true HJ Godunov for the bed-coupled term); coordinate/projection handling for real datasets</label></li>
 </ul>
 
 

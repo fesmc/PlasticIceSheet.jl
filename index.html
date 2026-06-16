@@ -237,14 +237,18 @@ window.Quarto = {
 </header>
 
 
-<p><code>PlasticIceSheet.jl</code> reconstructs a perfectly-plastic, steady-state ice sheet from three inputs — a grounded-ice <strong>margin/mask</strong>, a <strong>bed topography</strong> <span class="math inline">B</span>, and a <strong>basal shear stress</strong> field <span class="math inline">\tau</span> — and returns a glaciologically plausible ice <strong>surface</strong> <span class="math inline">E</span> and <strong>thickness</strong> <span class="math inline">H</span>. There is no time-stepping, no climate, and no ice dynamics.</p>
+<p><code>PlasticIceSheet.jl</code> reconstructs a perfectly-plastic, steady-state ice sheet from three inputs — a grounded-ice <strong>margin/mask</strong>, a <strong>bed elevation</strong> <span class="math inline">z_b</span>, and a <strong>basal shear stress</strong> field <span class="math inline">\tau_b</span> — and returns a glaciologically plausible ice <strong>surface</strong> <span class="math inline">z_s</span> and <strong>thickness</strong> <span class="math inline">H</span>. There is no time-stepping, no climate, and no ice dynamics.</p>
 <p>It is a clean-room simplification and modernization of <strong>ICESHEET 2.0</strong> by Evan Gowan and colleagues — <a href="https://github.com/evangowan/icesheet">source code</a>, the method’s description paper (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al., 2016, <em>Geosci. Model Dev.</em></a>), and its global application to the past 80,000 years (<a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al., 2021, <em>Nat. Commun.</em></a>). The core physics — a single published equation — is retained, while ICESHEET’s recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver (see <a href="#origin">Origin</a>).</p>
 <p>It is meant as a <em>complementary first-guess tool</em> next to a full dynamic model (e.g. <a href="https://github.com/palma-ice/yelmo">Yelmo</a>) and an independent GIA / sea-level solver: to seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.</p>
 <section id="the-idea-in-one-equation" class="level2">
 <h2 class="anchored" data-anchor-id="the-idea-in-one-equation">The idea in one equation</h2>
-<p>The ice surface elevation <span class="math inline">z_s</span> over a bed <span class="math inline">z_b</span>, with thickness <span class="math inline">H = z_s - z_b</span>, satisfies the perfectly-plastic balance — driving stress equals basal shear stress <span class="math inline">\tau</span> everywhere:</p>
+<p>Under a perfectly-plastic, steady-state assumption, the <strong>basal shear stress</strong> <span class="math inline">\tau_b</span> balances the gravitational driving stress everywhere — for surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>:</p>
 <p><span class="math display">
-|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H}, \qquad H = z_s - z_b .
+\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
+</span></p>
+<p>Given a prescribed <span class="math inline">\tau_b</span>, rearranging for the surface slope gives the equation we solve:</p>
+<p><span class="math display">
+|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
 </span></p>
 <p>This is a static <strong>Hamilton–Jacobi (eikonal) equation</strong>. Solving it with an upwind grid scheme means saddles, domes, and coalescing ice caps emerge automatically from the viscosity solution — there is no flowline tracing, crossover detection, or saddle bookkeeping. See <a href="./algorithms.html">Algorithms</a> for the full derivation and numerics.</p>
 </section>
@@ -256,10 +260,10 @@ window.Quarto = {
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>dx <span class="op">=</span> dy <span class="op">=</span> <span class="fl">2000.0</span>                                   <span class="co"># grid spacing (m)</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>bed  <span class="op">=</span> <span class="fu">zeros</span>(nx, ny)                               <span class="co"># bed elevation B (m)</span></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> [<span class="fu">hypot</span>(i<span class="op">-</span><span class="fl">50.5</span>, j<span class="op">-</span><span class="fl">50.5</span>) <span class="op">&lt;=</span> <span class="fl">40</span> for i <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>nx, j <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>ny]</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>τ    <span class="op">=</span> <span class="fl">1.0e5</span>                                       <span class="co"># basal shear stress (Pa)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>τ_b    <span class="op">=</span> <span class="fl">1.0e5</span>                                       <span class="co"># basal shear stress (Pa)</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>E, H <span class="op">=</span> <span class="fu">solve</span>(bed, τ, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>hj)     <span class="co"># :hj (default) or :flat</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A full Hamilton–Jacobi solve on a 300×300 grid takes ~0.1 s. The basal shear stress <span class="math inline">\tau</span> is differentiable, enabling gradient-based <a href="./usage.html#inverting-for">inversion</a>.</p>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>E, H <span class="op">=</span> <span class="fu">solve</span>(bed, τ_b, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>full)     <span class="co"># :full (default) or :flat</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A full Hamilton–Jacobi solve on a 300×300 grid takes ~0.1 s. The basal shear stress <span class="math inline">\tau_b</span> is differentiable, enabling gradient-based <a href="./usage.html#inverting-for">inversion</a>.</p>
 </section>
 <section id="origin" class="level2">
 <h2 class="anchored" data-anchor-id="origin">Origin</h2>

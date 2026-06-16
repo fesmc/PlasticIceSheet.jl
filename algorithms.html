@@ -179,14 +179,14 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#flat-mode" id="toc-flat-mode" class="nav-link" data-scroll-target="#flat-mode"><code>:flat</code> mode</a></li>
   </ul></li>
-  <li><a href="#hj-mode-the-bed-gradient-correction" id="toc-hj-mode-the-bed-gradient-correction" class="nav-link" data-scroll-target="#hj-mode-the-bed-gradient-correction">3. <code>:hj</code> mode — the bed-gradient correction</a>
+  <li><a href="#sec-full" id="toc-sec-full" class="nav-link" data-scroll-target="#sec-full">3. <code>:full</code> mode — the bed-gradient correction</a>
   <ul class="collapse">
   <li><a href="#damping-is-required" id="toc-damping-is-required" class="nav-link" data-scroll-target="#damping-is-required">Damping is required</a></li>
   </ul></li>
   <li><a href="#the-godunov-update" id="toc-the-godunov-update" class="nav-link" data-scroll-target="#the-godunov-update">4. The Godunov update</a></li>
   <li><a href="#fast-sweeping" id="toc-fast-sweeping" class="nav-link" data-scroll-target="#fast-sweeping">5. Fast sweeping</a></li>
   <li><a href="#boundary-conditions" id="toc-boundary-conditions" class="nav-link" data-scroll-target="#boundary-conditions">6. Boundary conditions</a></li>
-  <li><a href="#differentiating-with-respect-to-tau" id="toc-differentiating-with-respect-to-tau" class="nav-link" data-scroll-target="#differentiating-with-respect-to-tau">7. Differentiating with respect to <span class="math inline">\tau</span></a>
+  <li><a href="#sec-ad" id="toc-sec-ad" class="nav-link" data-scroll-target="#sec-ad">7. Differentiating with respect to <span class="math inline">\tau_b</span></a>
   <ul class="collapse">
   <li><a href="#forward-mode" id="toc-forward-mode" class="nav-link" data-scroll-target="#forward-mode">Forward mode</a></li>
   <li><a href="#reverse-mode-implicit-differentiation" id="toc-reverse-mode-implicit-differentiation" class="nav-link" data-scroll-target="#reverse-mode-implicit-differentiation">Reverse mode (implicit differentiation)</a></li>
@@ -250,8 +250,8 @@ window.Quarto = {
 <td>ice <strong>thickness</strong> (m)</td>
 </tr>
 <tr class="even">
-<td><span class="math inline">\tau</span></td>
-<td><code>τ</code></td>
+<td><span class="math inline">\tau_b</span></td>
+<td><code>τ_b</code></td>
 <td>basal <strong>shear stress</strong> (Pa)</td>
 </tr>
 <tr class="odd">
@@ -280,7 +280,7 @@ window.Quarto = {
 <td>the solver’s working variable (m²)</td>
 </tr>
 <tr class="even">
-<td><span class="math inline">G \equiv 2\tau/(\rho_i g)</span></td>
+<td><span class="math inline">G \equiv 2\tau_b/(\rho_i g)</span></td>
 <td>—</td>
 <td>flat-bed eikonal right-hand side (m)</td>
 </tr>
@@ -289,39 +289,43 @@ window.Quarto = {
 </section>
 <section id="the-governing-equation" class="level2">
 <h2 class="anchored" data-anchor-id="the-governing-equation">1. The governing equation</h2>
-<p>The reconstruction assumes <strong>perfectly plastic, steady-state</strong> ice: the gravitational driving stress is everywhere balanced by the basal shear stress <span class="math inline">\tau</span>. For an ice surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>, this balance is</p>
-<p><span id="eq-plastic"><span class="math display">
-|\nabla z_s| = \frac{\tau}{\rho_i\, g\, (z_s - z_b)} = \frac{\tau}{\rho_i\, g\, H},
+<p>The reconstruction assumes <strong>perfectly plastic, steady-state</strong> ice. The defining quantity is the <strong>basal shear stress</strong> <span class="math inline">\tau_b</span>, which under this assumption balances the gravitational driving stress — for an ice surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>, with <span class="math inline">\rho_i</span> the ice density and <span class="math inline">g</span> gravity:</p>
+<p><span id="eq-driving"><span class="math display">
+\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
 \tag{1}</span></span></p>
-<p>with <span class="math inline">\rho_i</span> the ice density and <span class="math inline">g</span> gravity. The right-hand side is a slope (dimensionless). <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> is a static <strong>Hamilton–Jacobi equation</strong>: the surface is built inward from the margin, where <span class="math inline">H \to 0</span>. Its upwind (viscosity) solution automatically yields the correct envelope wherever ice converges, so ice divides, domes, and merging ice caps appear without any explicit flowline or saddle handling.</p>
+<p>In a reconstruction <span class="math inline">\tau_b</span> is <em>prescribed</em> (it is the field we choose or invert for) and the surface <span class="math inline">z_s</span> is the unknown. Rearranging <a href="#eq-driving" class="quarto-xref">Equation&nbsp;1</a> for the surface slope gives the equation we actually solve:</p>
+<p><span id="eq-plastic"><span class="math display">
+|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
+\tag{2}</span></span></p>
+<p>The right-hand side is a slope (dimensionless). <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;2</a> is a static <strong>Hamilton–Jacobi equation</strong>: the surface is built inward from the margin, where <span class="math inline">H \to 0</span>. Its upwind (viscosity) solution automatically yields the correct envelope wherever ice converges, so ice divides, domes, and merging ice caps appear without any explicit flowline or saddle handling.</p>
 <p>This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing characteristics.</p>
 </section>
 <section id="solve-for-h2-not-z_s" class="level2">
 <h2 class="anchored" data-anchor-id="solve-for-h2-not-z_s">2. Solve for <span class="math inline">H^2</span>, not <span class="math inline">z_s</span></h2>
-<p>Near the margin <span class="math inline">H \to 0</span>, so the driving slope <span class="math inline">\tau/(\rho_i g H)</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> <strong>diverges</strong>. Discretising <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> for <span class="math inline">z_s</span> directly is therefore inaccurate near the margin and biases the whole reconstruction thin. The fix is a change of variable.</p>
-<p>On a flat bed, <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> reads <span class="math inline">|\nabla H| = \tau/(\rho_i g H)</span>. Multiplying by <span class="math inline">2H</span> and using <span class="math inline">\nabla(H^2) = 2H\,\nabla H</span>,</p>
+<p>Near the margin <span class="math inline">H \to 0</span>, so the driving slope <span class="math inline">\tau_b/(\rho_i g H)</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;2</a> <strong>diverges</strong>. Discretising <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;2</a> for <span class="math inline">z_s</span> directly is therefore inaccurate near the margin and biases the whole reconstruction thin. The fix is a change of variable.</p>
+<p>On a flat bed, <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;2</a> reads <span class="math inline">|\nabla H| = \tau_b/(\rho_i g H)</span>. Multiplying by <span class="math inline">2H</span> and using <span class="math inline">\nabla(H^2) = 2H\,\nabla H</span>,</p>
 <p><span id="eq-flat"><span class="math display">
-\bigl|\nabla (H^2)\bigr| = \frac{2\tau}{\rho_i\, g}.
-\tag{2}</span></span></p>
-<p>The singularity is gone: the working variable <span class="math inline">w \equiv H^2</span> satisfies a <strong>plain eikonal</strong> <span class="math inline">|\nabla w| = G</span> with a finite right-hand side <span class="math inline">G = 2\tau/(\rho_i g)</span>, and the boundary condition <span class="math inline">w = 0</span> at the margin is regular. Both solver modes work in <span class="math inline">w = H^2</span>; the thickness is recovered as <span class="math inline">H = \sqrt{w}</span> and the surface as <span class="math inline">z_s = H + z_b</span>.</p>
+\bigl|\nabla (H^2)\bigr| = \frac{2\tau_b}{\rho_i\, g}.
+\tag{3}</span></span></p>
+<p>The singularity is gone: the working variable <span class="math inline">w \equiv H^2</span> satisfies a <strong>plain eikonal</strong> <span class="math inline">|\nabla w| = G</span> with a finite right-hand side <span class="math inline">G = 2\tau_b/(\rho_i g)</span>, and the boundary condition <span class="math inline">w = 0</span> at the margin is regular. Both solver modes work in <span class="math inline">w = H^2</span>; the thickness is recovered as <span class="math inline">H = \sqrt{w}</span> and the surface as <span class="math inline">z_s = H + z_b</span>.</p>
 <section id="flat-mode" class="level3">
 <h3 class="anchored" data-anchor-id="flat-mode"><code>:flat</code> mode</h3>
-<p><code>:flat</code> solves <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a> exactly and drapes the result on the bed. It is the cheapest mode and is appropriate whenever bed relief is small compared with ice thickness (continental interiors). ICESHEET’s own sensitivity tests indicate the bed-gradient terms are second-order except in mountainous terrain.</p>
+<p><code>:flat</code> solves <a href="#eq-flat" class="quarto-xref">Equation&nbsp;3</a> exactly and drapes the result on the bed. It is the cheapest mode and is appropriate whenever bed relief is small compared with ice thickness (continental interiors). ICESHEET’s own sensitivity tests indicate the bed-gradient terms are second-order except in mountainous terrain.</p>
 </section>
 </section>
-<section id="hj-mode-the-bed-gradient-correction" class="level2">
-<h2 class="anchored" data-anchor-id="hj-mode-the-bed-gradient-correction">3. <code>:hj</code> mode — the bed-gradient correction</h2>
-<p>Over significant relief the bed slope <span class="math inline">\nabla z_b</span> enters the flux. Writing <span class="math inline">\nabla z_s = \nabla H + \nabla z_b</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;1</a> and carrying the algebra through in the <span class="math inline">w = H^2</span> variable gives, <strong>exactly in one dimension</strong>,</p>
+<section id="sec-full" class="level2">
+<h2 class="anchored" data-anchor-id="sec-full">3. <code>:full</code> mode — the bed-gradient correction</h2>
+<p>Over significant relief the bed slope <span class="math inline">\nabla z_b</span> enters the flux. Writing <span class="math inline">\nabla z_s = \nabla H + \nabla z_b</span> in <a href="#eq-plastic" class="quarto-xref">Equation&nbsp;2</a> and carrying the algebra through in the <span class="math inline">w = H^2</span> variable gives, <strong>exactly in one dimension</strong>,</p>
 <p><span id="eq-hj"><span class="math display">
 |\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla z_b \cdot \nabla w)\;-\;4\,w\,|\nabla z_b|^2\,},
-\qquad G = \frac{2\tau}{\rho_i g}.
-\tag{3}</span></span></p>
-<p>Two properties make <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> the right object to solve:</p>
+\qquad G = \frac{2\tau_b}{\rho_i g}.
+\tag{4}</span></span></p>
+<p>Two properties make <a href="#eq-hj" class="quarto-xref">Equation&nbsp;4</a> the right object to solve:</p>
 <ul>
-<li>when <span class="math inline">\nabla z_b = 0</span> it reduces to the flat eikonal <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>, so <code>:hj</code> and <code>:flat</code> agree exactly on a flat bed;</li>
-<li>it is written in <span class="math inline">w = H^2</span>, so it inherits the regular margin behaviour of <a href="#eq-flat" class="quarto-xref">Equation&nbsp;2</a>.</li>
+<li>when <span class="math inline">\nabla z_b = 0</span> it reduces to the flat eikonal <a href="#eq-flat" class="quarto-xref">Equation&nbsp;3</a>, so <code>:full</code> and <code>:flat</code> agree exactly on a flat bed;</li>
+<li>it is written in <span class="math inline">w = H^2</span>, so it inherits the regular margin behaviour of <a href="#eq-flat" class="quarto-xref">Equation&nbsp;3</a>.</li>
 </ul>
-<p>The effective right-hand side depends on <span class="math inline">\nabla w</span> (through the <span class="math inline">\nabla z_b\cdot\nabla w</span> term), so <a href="#eq-hj" class="quarto-xref">Equation&nbsp;3</a> is not a pure eikonal. It is solved by an <strong>outer fixed-point iteration</strong>: freeze the right-hand side from the current <span class="math inline">w</span>, solve the resulting constant-RHS eikonal for a candidate <span class="math inline">w_c</span>, and update.</p>
+<p>The effective right-hand side depends on <span class="math inline">\nabla w</span> (through the <span class="math inline">\nabla z_b\cdot\nabla w</span> term), so <a href="#eq-hj" class="quarto-xref">Equation&nbsp;4</a> is not a pure eikonal. It is solved by an <strong>outer fixed-point iteration</strong>: freeze the right-hand side from the current <span class="math inline">w</span>, solve the resulting constant-RHS eikonal for a candidate <span class="math inline">w_c</span>, and update.</p>
 <section id="damping-is-required" class="level3">
 <h3 class="anchored" data-anchor-id="damping-is-required">Damping is required</h3>
 <p>The naive update <span class="math inline">w \leftarrow \text{Eikonal}\!\left(\text{RHS}(w)\right)</span> is <strong>not contractive</strong> — over real bed relief it oscillates indefinitely. The solver therefore uses an <strong>under-relaxed (damped) Picard iteration</strong>,</p>
@@ -363,26 +367,26 @@ H_{flt} = \frac{\rho_w}{\rho_i}\,\bigl(z_{ss} - z_b\bigr), \qquad w = H_{flt}^2,
 </span> reproducing ICESHEET’s marine grounding-line treatment. The eikonal then grows the ice inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum surface slope <em>is</em> the plastic constraint the eikonal enforces.</li>
 </ul>
 </section>
-<section id="differentiating-with-respect-to-tau" class="level2">
-<h2 class="anchored" data-anchor-id="differentiating-with-respect-to-tau">7. Differentiating with respect to <span class="math inline">\tau</span></h2>
-<p>Because the solver is a pure function of <span class="math inline">\tau</span>, an objective on the output (a misfit to an observed surface, a target volume, …) is differentiable — enabling <strong>basal-shear-stress inversion</strong>.</p>
+<section id="sec-ad" class="level2">
+<h2 class="anchored" data-anchor-id="sec-ad">7. Differentiating with respect to <span class="math inline">\tau_b</span></h2>
+<p>Because the solver is a pure function of <span class="math inline">\tau_b</span>, an objective on the output (a misfit to an observed surface, a target volume, …) is differentiable — enabling <strong>basal-shear-stress inversion</strong>.</p>
 <section id="forward-mode" class="level3">
 <h3 class="anchored" data-anchor-id="forward-mode">Forward mode</h3>
-<p>For a scalar <span class="math inline">\tau</span> or a low-dimensional parameterization, <code>ForwardDiff</code> differentiates straight through <code>solve</code>. Cost scales with the number of parameters.</p>
+<p>For a scalar <span class="math inline">\tau_b</span> or a low-dimensional parameterization, <code>ForwardDiff</code> differentiates straight through <code>solve</code>. Cost scales with the number of parameters.</p>
 </section>
 <section id="reverse-mode-implicit-differentiation" class="level3">
 <h3 class="anchored" data-anchor-id="reverse-mode-implicit-differentiation">Reverse mode (implicit differentiation)</h3>
-<p>For a full per-cell <span class="math inline">\tau</span> field, differentiating through the sweeps would be wasteful. Instead, the converged field satisfies an <strong>optimality condition</strong> — the Godunov residual</p>
+<p>For a full per-cell <span class="math inline">\tau_b</span> field, differentiating through the sweeps would be wasteful. Instead, the converged field satisfies an <strong>optimality condition</strong> — the Godunov residual</p>
 <p><span class="math display">
-r_{i,j}(w, \tau) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
+r_{i,j}(w, \tau_b) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
 </span></p>
 <p>on ice cells (and <span class="math inline">w - \text{bc} = 0</span> off-ice). By the implicit function theorem, for a loss <span class="math inline">L(w)</span>,</p>
 <p><span class="math display">
-\frac{\partial L}{\partial \tau}
-= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau},
+\frac{\partial L}{\partial \tau_b}
+= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau_b},
 </span></p>
 <p>so the gradient costs a single linear solve with the residual Jacobian, <strong>independent of the number of sweeps or outer iterations</strong> and scalable to a full field. The forward fast sweep is treated as a black box; only the residual is differentiated (with <code>ForwardDiff</code> internally). This is wired up with <a href="https://github.com/JuliaDecisionFocusedLearning/ImplicitDifferentiation.jl"><code>ImplicitDifferentiation.jl</code></a> in a package extension, so any reverse-mode AD (e.g.&nbsp;Zygote) obtains the gradient.</p>
-<p>The <code>:flat</code> gradient is exact to machine precision; the <code>:hj</code> gradient is exact once the damped forward solve (§3) has driven the residual to <span class="math inline">\approx 0</span>.</p>
+<p>The <code>:flat</code> gradient is exact to machine precision; the <code>:full</code> gradient is exact once the damped forward solve (§3) has driven the residual to <span class="math inline">\approx 0</span>.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
