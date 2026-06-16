@@ -210,3 +210,44 @@ end
     small = 1.0e3
     @test basal_velocity(rc, small) ≈ rc.u_0 * (small / rc.C)^rc.m rtol = 1e-2
 end
+
+@testset "DIVA velocity and implied SMB (closure B)" begin
+    # Circular ice cap on a flat bed.
+    nx, ny = 61, 61
+    dx = dy = 2000.0
+    z_b = zeros(nx, ny)
+    mask = falses(nx, ny)
+    cx = cy = 31.0
+    for j in 1:ny, i in 1:nx
+        hypot(i - cx, j - cy) <= 24.0 && (mask[i, j] = true)
+    end
+    τ_b = 8.0e4
+    z_s, H = solve(z_b, τ_b, mask; dx, dy, mode = :flat, max_sweeps = 600, tol = 1e-9)
+
+    r = GlenRheology(A = 1.0e-16, n = 3.0)
+    sl = WeertmanSliding(β = 1.0e4, m = 3.0)
+    vel = diva_velocity(z_s, H, τ_b, mask, dx, dy; rheology = r, sliding = sl)
+
+    # Speed is sliding + deformation at the local driving stress τ = τ_b.
+    ci, cj = 31, 31
+    @test vel.speed[ci, cj] ≈ basal_velocity(sl, τ_b) + deformational_velocity(r, τ_b, H[ci, cj])
+    # Horizontal velocity vanishes at the divide and flows outward (down-gradient).
+    @test hypot(vel.ux[ci, cj], vel.uy[ci, cj]) == 0.0
+    @test vel.ux[ci + 10, cj] > 0
+    @test vel.uy[ci, cj + 10] > 0
+    # Ice-free cells carry no velocity.
+    @test all(vel.speed[.!mask] .== 0)
+
+    # smb_from_velocity computes ∇·(ūH): a manufactured ūˣ = a·x, ūʸ = 0 field over
+    # uniform H has constant divergence a·H.
+    a = 1.0e-4
+    Hc = 1500.0
+    ux = [a * (i - 1) * dx for i in 1:nx, j in 1:ny]
+    smb = smb_from_velocity((; ux = ux, uy = zeros(nx, ny)), fill(Hc, nx, ny), dx, dy)
+    @test smb[30, 30] ≈ a * Hc rtol = 1e-6
+
+    # Differentiable w.r.t. τ_b — the tuple works as an observation operator for inversion.
+    obj(tb) = sum(diva_velocity(z_s, H, tb, mask, dx, dy; rheology = r, sliding = sl).speed)
+    g = ForwardDiff.derivative(obj, τ_b)
+    @test isfinite(g) && g > 0
+end
