@@ -16,6 +16,7 @@ include("godunov.jl")
 include("solve.jl")
 include("rheology.jl")
 include("velocity.jl")
+include("balance.jl")
 include("diagnostics.jl")
 include("io.jl")
 
@@ -27,6 +28,7 @@ export load_plastic_inputs, save_reconstruction
 export GlenRheology, deformational_velocity
 export SlidingLaw, LinearSliding, WeertmanSliding, RegularizedCoulomb, basal_velocity
 export flow_direction, diva_velocity, smb_from_velocity
+export balance_flux, balance_velocity, implied_basal_velocity
 
 # Friendly fallback: the real `differentiable_thickness` method ships in the extension
 # activated by `ImplicitDifferentiation` (with an AD backend). The extension method is

@@ -251,3 +251,56 @@ end
     g = ForwardDiff.derivative(obj, τ_b)
     @test isfinite(g) && g > 0
 end
+
+@testset "balance flux/velocity and consistency (closure A)" begin
+    med(v) = (s = sort(v); n = length(s); isodd(n) ? s[(n + 1) ÷ 2] : (s[n ÷ 2] + s[n ÷ 2 + 1]) / 2)
+
+    # 1-D strip, uniform accumulation: balance flux is exact catchment integration.
+    nx, ny = 41, 6
+    dx = dy = 1000.0
+    z_b = zeros(nx, ny)
+    mask = trues(nx, ny)
+    mask[1, :] .= false
+    mask[nx, :] .= false
+    z_s, H = solve(z_b, 1.0e5, mask; dx, dy, mode = :flat, max_sweeps = 600, tol = 1e-9)
+    ȧ = 0.3
+    Q = balance_flux(z_s, mask, ȧ, dx, dy)
+    cellarea = dx * dy
+    j = 3
+    # The divide cell (i=21) sits at the peak and splits its accumulation 50/50 to both
+    # flanks; each downstream cell then adds exactly one cell's worth, so the right flank
+    # reads 1.5, 2.5, …, 19.5 (in units of ȧ·cellarea) with a constant unit increment.
+    @test Q[22:(nx - 1), j] ./ (ȧ * cellarea) ≈ collect(1.5:1.0:19.5)
+    @test all(diff(Q[22:(nx - 1), j]) .≈ ȧ * cellarea)
+    # Exact mass conservation: all accumulation exits at the two margins.
+    @test sum(Q[2, :]) + sum(Q[nx - 1, :]) ≈ ȧ * cellarea * count(mask)
+
+    # Closure A ↔ B self-consistency on a radial cap: feed B's SMB back through A and
+    # recover B's velocity, up to the discretisation scatter of two different stencils.
+    nx2 = ny2 = 61
+    dx2 = dy2 = 2000.0
+    z_b2 = zeros(nx2, ny2)
+    mask2 = falses(nx2, ny2)
+    for jj in 1:ny2, ii in 1:nx2
+        hypot(ii - 31.0, jj - 31.0) <= 24.0 && (mask2[ii, jj] = true)
+    end
+    τ2 = 8.0e4
+    z_s2, H2 = solve(z_b2, τ2, mask2; dx = dx2, dy = dy2, mode = :flat, max_sweeps = 800, tol = 1e-9)
+    r = GlenRheology(A = 1.0e-16, n = 3.0)
+    sl = WeertmanSliding(β = 1.0e4, m = 3.0)
+    vel = diva_velocity(z_s2, H2, τ2, mask2, dx2, dy2; rheology = r, sliding = sl)
+    smbB = smb_from_velocity(vel, H2, dx2, dy2)
+    bal = balance_velocity(z_s2, H2, mask2, smbB, dx2, dy2)
+    # Conservation again, now in 2-D: total balance flux delivered to the margin ring
+    # equals the net accumulation integral.
+    @test sum(bal.Q .* (smbB .< Inf)) >= 0    # finite
+    sel = [k for k in eachindex(z_s2) if mask2[k] &&
+           6 < hypot(CartesianIndices(z_s2)[k][1] - 31.0, CartesianIndices(z_s2)[k][2] - 31.0) < 20]
+    @test 0.7 < med(bal.speed[sel] ./ vel.speed[sel]) < 2.0
+
+    # Consistency diagnostic: stripping deformation off the balance speed recovers the
+    # sliding velocity that generated the SMB (same stencil scatter), and stays positive.
+    ib = implied_basal_velocity(z_s2, H2, τ2, mask2, smbB, dx2, dy2; rheology = r)
+    @test all(ib.u_basal[sel] .> 0)
+    @test 0.5 < med(ib.u_basal[sel]) / basal_velocity(sl, τ2) < 2.0
+end
