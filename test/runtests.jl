@@ -183,3 +183,30 @@ end
     @test got.τ_b ≈ τ_b
     rm(out); rm(inp)
 end
+
+@testset "constitutive laws: deformation and sliding inversions" begin
+    # Glen deformation is the SIA closed form 2A/(n+2)·τⁿ·H.
+    r = GlenRheology(A = 1.0e-16, n = 3.0)
+    @test deformational_velocity(r, 8.0e4, 2000.0) ≈ (2 * 1.0e-16 / 5) * (8.0e4)^3 * 2000.0
+    @test deformational_velocity(r, 0.0, 2000.0) == 0.0   # no driving stress ⇒ no flow
+
+    # Each sliding law inverts its own forward relation at the operating drag.
+    τ_b = 8.0e4
+    lin = LinearSliding(β = 2.0e3)
+    @test lin.β * basal_velocity(lin, τ_b) ≈ τ_b
+
+    wm = WeertmanSliding(β = 1.0e4, m = 3.0)
+    @test wm.β * basal_velocity(wm, τ_b)^(1 / wm.m) ≈ τ_b
+    # m = 1 Weertman coincides with linear of the same β.
+    @test basal_velocity(WeertmanSliding(β = 2.0e3, m = 1.0), τ_b) ≈ basal_velocity(lin, τ_b)
+
+    rc = RegularizedCoulomb(C = 1.0e5, u_0 = 100.0, m = 3.0)
+    ub = basal_velocity(rc, τ_b)
+    @test rc.C * (ub / (ub + rc.u_0))^(1 / rc.m) ≈ τ_b   # forward relation holds
+    # At and above the Coulomb cap the speed is undetermined ⇒ NaN, not a fabricated value.
+    @test isnan(basal_velocity(rc, rc.C))
+    @test isnan(basal_velocity(rc, 1.2e5))
+    # Low-speed limit approaches the matching Weertman power law u_b ∝ τ_bᵐ.
+    small = 1.0e3
+    @test basal_velocity(rc, small) ≈ rc.u_0 * (small / rc.C)^rc.m rtol = 1e-2
+end
