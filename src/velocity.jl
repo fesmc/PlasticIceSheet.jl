@@ -76,18 +76,5 @@ function diva_velocity(z_s, H, τ_b, mask, dx, dy;
     return (; ux, uy, speed, u_b, u_def, ex, ey)
 end
 
-"""
-    smb_from_velocity(vel, H, dx, dy)
-
-First-order steady-state surface mass balance implied by a velocity field, `ḃ = ∇·(ū H)`,
-evaluated by central differences from the flux `q = ū H`. `vel` is the named tuple from
-[`diva_velocity`](@ref) (only `vel.ux`, `vel.uy` are read). Positive values are net
-accumulation (flux divergence); negative values net ablation (convergence).
-"""
-function smb_from_velocity(vel, H, dx, dy)
-    qx = vel.ux .* H
-    qy = vel.uy .* H
-    dqx_dx, _ = _grad(qx, dx, dy)
-    _, dqy_dy = _grad(qy, dx, dy)
-    return dqx_dx .+ dqy_dy
-end
+# `smb_from_velocity` (the implied SMB, ∇·(ūH)) lives in `balance.jl`, where it shares the
+# finite-volume MFD flux operator with `balance_flux` so the two are exact inverses.

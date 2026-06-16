@@ -238,13 +238,13 @@ end
     # Ice-free cells carry no velocity.
     @test all(vel.speed[.!mask] .== 0)
 
-    # smb_from_velocity computes ∇·(ūH): a manufactured ūˣ = a·x, ūʸ = 0 field over
-    # uniform H has constant divergence a·H.
-    a = 1.0e-4
-    Hc = 1500.0
-    ux = [a * (i - 1) * dx for i in 1:nx, j in 1:ny]
-    smb = smb_from_velocity((; ux = ux, uy = zeros(nx, ny)), fill(Hc, nx, ny), dx, dy)
-    @test smb[30, 30] ≈ a * Hc rtol = 1e-6
+    # smb_from_velocity is the finite-volume MFD divergence ∇·(ūH), built to be the exact
+    # inverse of balance_flux: routing the implied SMB back down the surface recovers ū H
+    # to machine precision (the consistency the SMB-driven reconstruction rests on).
+    smb = smb_from_velocity(vel, H, z_s, mask, dx, dy)
+    Q = balance_flux(z_s, mask, smb, dx, dy)
+    out = vel.speed .* H .* sqrt(dx * dy)
+    @test maximum(abs.(Q[mask] .- out[mask])) / maximum(out) < 1e-10
 
     # Differentiable w.r.t. τ_b — the tuple works as an observation operator for inversion.
     obj(tb) = sum(diva_velocity(z_s, H, tb, mask, dx, dy; rheology = r, sliding = sl).speed)
@@ -275,8 +275,9 @@ end
     # Exact mass conservation: all accumulation exits at the two margins.
     @test sum(Q[2, :]) + sum(Q[nx - 1, :]) ≈ ȧ * cellarea * count(mask)
 
-    # Closure A ↔ B self-consistency on a radial cap: feed B's SMB back through A and
-    # recover B's velocity, up to the discretisation scatter of two different stencils.
+    # Closure A ↔ B self-consistency on a radial cap: because routing is the exact inverse
+    # of the implied-SMB divergence, feeding B's SMB back through A recovers B's velocity
+    # to machine precision (no stencil scatter — the shared MFD operator).
     nx2 = ny2 = 61
     dx2 = dy2 = 2000.0
     z_b2 = zeros(nx2, ny2)
@@ -289,18 +290,48 @@ end
     r = GlenRheology(A = 1.0e-16, n = 3.0)
     sl = WeertmanSliding(β = 1.0e4, m = 3.0)
     vel = diva_velocity(z_s2, H2, τ2, mask2, dx2, dy2; rheology = r, sliding = sl)
-    smbB = smb_from_velocity(vel, H2, dx2, dy2)
+    smbB = smb_from_velocity(vel, H2, z_s2, mask2, dx2, dy2)
     bal = balance_velocity(z_s2, H2, mask2, smbB, dx2, dy2)
-    # Conservation again, now in 2-D: total balance flux delivered to the margin ring
-    # equals the net accumulation integral.
-    @test sum(bal.Q .* (smbB .< Inf)) >= 0    # finite
     sel = [k for k in eachindex(z_s2) if mask2[k] &&
            6 < hypot(CartesianIndices(z_s2)[k][1] - 31.0, CartesianIndices(z_s2)[k][2] - 31.0) < 20]
-    @test 0.7 < med(bal.speed[sel] ./ vel.speed[sel]) < 2.0
+    @test maximum(abs.(bal.speed[sel] .- vel.speed[sel])) / maximum(vel.speed[sel]) < 1e-9
 
-    # Consistency diagnostic: stripping deformation off the balance speed recovers the
-    # sliding velocity that generated the SMB (same stencil scatter), and stays positive.
+    # Consistency diagnostic: stripping deformation off the balance speed recovers exactly
+    # the sliding velocity that generated the SMB.
     ib = implied_basal_velocity(z_s2, H2, τ2, mask2, smbB, dx2, dy2; rheology = r)
     @test all(ib.u_basal[sel] .> 0)
-    @test 0.5 < med(ib.u_basal[sel]) / basal_velocity(sl, τ2) < 2.0
+    @test maximum(abs.(ib.u_basal[sel] .- basal_velocity(sl, τ2))) < 1e-6
+end
+
+@testset "SMB-driven reconstruction (feature 2)" begin
+    relerr(H, H0, sel) = (d = sort(abs.(H[sel] .- H0[sel]) ./ H0[sel]); d[length(d) ÷ 2])
+
+    nx, ny = 41, 41
+    dx = dy = 2500.0
+    z_b = zeros(nx, ny)
+    mask = falses(nx, ny)
+    for j in 1:ny, i in 1:nx
+        hypot(i - 21.0, j - 21.0) <= 16.0 && (mask[i, j] = true)
+    end
+    τ_b = 8.0e4
+    z_s0, H0 = solve(z_b, τ_b, mask; dx, dy, mode = :flat, max_sweeps = 600, tol = 1e-9)
+    r = GlenRheology(A = 1.0e-16, n = 3.0)
+    sl = WeertmanSliding(β = 1.0e4, m = 3.0)
+    vel = diva_velocity(z_s0, H0, τ_b, mask, dx, dy; rheology = r, sliding = sl)
+    smb = smb_from_velocity(vel, H0, z_s0, mask, dx, dy)
+    sel = [k for k in eachindex(H0) if mask[k] &&
+           hypot(CartesianIndices(H0)[k][1] - 21.0, CartesianIndices(H0)[k][2] - 21.0) < 12]
+
+    # The plastic solution is a clean fixed point of the SMB-driven map: started there with
+    # its own implied SMB, it does not move (the consistency the operators were built for).
+    _, Hfp = diva_reconstruct(z_b, mask, smb, dx, dy; rheology = r, sliding = sl, H_init = H0)
+    @test maximum(abs.(Hfp[mask] .- H0[mask])) < 1e-6
+
+    # And it is recovered from a cold (flat) start by the under-relaxed iteration.
+    Hg = fill(400.0, nx, ny)
+    Hg[.!mask] .= 0
+    _, Hc = diva_reconstruct(z_b, mask, smb, dx, dy; rheology = r, sliding = sl,
+                             H_init = Hg, relax = 0.05, n_outer = 800)
+    @test relerr(Hc, H0, sel) < 0.02
+    @test isapprox(maximum(Hc), maximum(H0); rtol = 0.05)
 end
