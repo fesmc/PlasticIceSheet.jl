@@ -20,15 +20,21 @@ colleagues — [source code](https://github.com/evangowan/icesheet), the method'
 description paper ([Gowan et al., 2016, *Geosci. Model Dev.*](https://doi.org/10.5194/gmd-9-1673-2016)),
 and its global application ([Gowan et al., 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)).
 
-The physics is a single statement: under a perfectly-plastic, steady-state assumption the
-**basal shear stress** `τ_b` balances the gravitational driving stress,
+The physics is a short chain. Under a perfectly-plastic, steady-state assumption the
+**basal shear stress** `τ_b` balances the gravitational **driving stress** `τ_d`,
 
 ```
-τ_b = ρ_i g H |∇z_s|,        H = z_s − z_b,
+τ_b = τ_d,
 ```
 
-for surface elevation `z_s`, bed elevation `z_b`, and thickness `H`. Given a prescribed
-`τ_b`, rearranging for the surface slope yields the equation we actually solve,
+and the driving stress is fixed by the ice geometry, `τ_d = ρ_i g H |∇z_s|` (with
+`H = z_s − z_b`), so for a prescribed `τ_b`,
+
+```
+τ_b = ρ_i g H |∇z_s|.
+```
+
+Rearranging for the surface slope yields the equation we actually solve,
 
 ```
 |∇z_s| = τ_b / (ρ_i g H) = τ_b / (ρ_i g (z_s − z_b)),

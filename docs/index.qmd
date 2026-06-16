@@ -22,17 +22,19 @@ It is meant as a *complementary first-guess tool* next to a full dynamic model (
 [Yelmo](https://github.com/palma-ice/yelmo)) and an independent GIA / sea-level solver: to
 seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.
 
-## The idea in one equation
+## The idea
 
 Under a perfectly-plastic, steady-state assumption, the **basal shear stress** $\tau_b$
-balances the gravitational driving stress everywhere — for surface elevation $z_s$, bed
-elevation $z_b$, and thickness $H = z_s - z_b$:
+balances the gravitational **driving stress** $\tau_d$ everywhere:
 
 $$
-\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
+\tau_b = \tau_d .
 $$
 
-Given a prescribed $\tau_b$, rearranging for the surface slope gives the equation we solve:
+The driving stress is fixed by the ice geometry — for surface elevation $z_s$, bed
+elevation $z_b$, and thickness $H = z_s - z_b$, $\tau_d = \rho_i\, g\, H\, |\nabla z_s|$ —
+so the prescribed $\tau_b$ relates to the surface as $\tau_b = \rho_i\, g\, H\, |\nabla z_s|$.
+Rearranging for the surface slope gives the equation we solve:
 
 $$
 |\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .

@@ -32,16 +32,16 @@ published equation, below); none of the Fortran source is copied. This package i
 ## The physics we keep
 
 The entire scientific content of ICESHEET is one equation. Under the perfectly-plastic,
-steady-state assumption the basal shear stress `τ_b` balances the driving stress
-(paper Eq. 5):
+steady-state assumption the basal shear stress `τ_b` balances the gravitational driving
+stress `τ_d` (paper Eq. 5):
 
 ```
-τ_b = ρ_i g H |∇z_s|,    H = z_s − z_b ≥ 0
+τ_b = τ_d = ρ_i g H |∇z_s|,    H = z_s − z_b ≥ 0
 ```
 
 with `z_s` the ice surface elevation, `z_b` the bed elevation, `H` the thickness, `τ_b` the
-basal shear stress, `ρ_i` ice density, `g` gravity. With `τ_b` prescribed, rearrange for
-the surface slope to get the form we solve:
+basal shear stress, `τ_d` the driving stress, `ρ_i` ice density, `g` gravity. With `τ_b`
+prescribed, rearrange for the surface slope to get the form we solve:
 
 ```
 |∇z_s| = τ_b / (ρ_i g H) = τ_b / (ρ_i g (z_s − z_b))

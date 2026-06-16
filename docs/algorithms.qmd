@@ -14,6 +14,7 @@ respect to the shear stress.
 | $z_b$ | `z_b` | **bed** elevation (m) |
 | $H = z_s - z_b$ | `H` | ice **thickness** (m) |
 | $\tau_b$ | `τ_b` | basal **shear stress** (Pa) |
+| $\tau_d$ | — | gravitational **driving stress** (Pa) |
 | $z_{ss}$ | `z_ss` | sea-surface elevation, i.e. sea level (m) |
 | $H_{flt}$ | — | marine **flotation** thickness (m) |
 | $\rho_i,\ \rho_w$ | `ρ_i, ρ_w` | ice / sea-water density (kg m⁻³) |
@@ -23,18 +24,31 @@ respect to the shear stress.
 
 ## 1. The governing equation
 
-The reconstruction assumes **perfectly plastic, steady-state** ice. The defining quantity
-is the **basal shear stress** $\tau_b$, which under this assumption balances the
-gravitational driving stress — for an ice surface elevation $z_s$, bed elevation $z_b$,
-and thickness $H = z_s - z_b$, with $\rho_i$ the ice density and $g$ gravity:
+The reconstruction assumes **perfectly plastic, steady-state** ice. In that limit the
+basal shear stress $\tau_b$ exactly balances the gravitational driving stress $\tau_d$:
+
+$$
+\tau_b = \tau_d .
+$$ {#eq-balance}
+
+The driving stress is set by the ice geometry — for an ice surface elevation $z_s$, bed
+elevation $z_b$, and thickness $H = z_s - z_b$, with $\rho_i$ the ice density and $g$
+gravity:
+
+$$
+\tau_d = \rho_i\, g\, H\, |\nabla z_s| .
+$$ {#eq-driving}
+
+Combining @eq-balance and @eq-driving relates the prescribed basal shear stress to the
+surface geometry:
 
 $$
 \tau_b = \rho_i\, g\, H\, |\nabla z_s| .
-$$ {#eq-driving}
+$$ {#eq-plastic-stress}
 
 In a reconstruction $\tau_b$ is *prescribed* (it is the field we choose or invert for) and
-the surface $z_s$ is the unknown. Rearranging @eq-driving for the surface slope gives the
-equation we actually solve:
+the surface $z_s$ is the unknown. Rearranging for the surface slope gives the equation we
+actually solve:
 
 $$
 |\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
