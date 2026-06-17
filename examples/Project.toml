@@ -1,0 +1,10 @@
+[deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+ImplicitDifferentiation = "57b37032-215b-411a-8a7c-41a003a55207"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+PlasticIceSheet = "93662aab-ba50-4a1d-a5d1-023c4578c01c"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"

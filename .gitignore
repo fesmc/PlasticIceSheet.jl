@@ -8,3 +8,9 @@
 *.jl.*.cov
 *.jl.mem
 .DS_Store
+# symlink to the external ice-data tree used by examples/
+/examples/ice_data
+# example outputs (NetCDF + figures)
+/examples/output/
+# disposable run logs
+/logs/
