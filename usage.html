@@ -178,6 +178,10 @@ window.Quarto = {
 <span class="menu-text">Algorithms</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./inversion.html"> 
+<span class="menu-text">Inversion</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link active" href="./usage.html" aria-current="page"> 
 <span class="menu-text">Usage</span></a>
   </li>  
@@ -224,6 +228,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#forward-mode-scalar-low-dimensional-tau_b" id="toc-forward-mode-scalar-low-dimensional-tau_b" class="nav-link" data-scroll-target="#forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></a></li>
   <li><a href="#reverse-mode-full-per-cell-tau_b-field" id="toc-reverse-mode-full-per-cell-tau_b-field" class="nav-link" data-scroll-target="#reverse-mode-full-per-cell-tau_b-field">Reverse mode — full per-cell <span class="math inline">\tau_b</span> field</a></li>
+  <li><a href="#choosing-a-parameterization" id="toc-choosing-a-parameterization" class="nav-link" data-scroll-target="#choosing-a-parameterization">Choosing a parameterization</a></li>
   </ul></li>
   <li><a href="#netcdf-io" id="toc-netcdf-io" class="nav-link" data-scroll-target="#netcdf-io">NetCDF I/O</a></li>
   <li><a href="#caveats" id="toc-caveats" class="nav-link" data-scroll-target="#caveats">Caveats</a></li>
@@ -368,6 +373,13 @@ Warning
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ_b, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ_b)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ_b field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>A complete, runnable Adam-based recovery of a spatially-varying <span class="math inline">\tau_b</span> from an observed surface is in <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a>. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.</p>
+</section>
+<section id="choosing-a-parameterization" class="level3">
+<h3 class="anchored" data-anchor-id="choosing-a-parameterization">Choosing a parameterization</h3>
+<p>How you parameterize <span class="math inline">\tau_b</span> — a regularized per-cell field, or a few bed-derived tiles — matters as much as the gradient. The real-data Greenland example <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl"><code>examples/invert_taub_greenland.jl</code></a> implements both and switches with one env var:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl                  <span class="co"># tiled (default)</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="va">METHOD</span><span class="op">=</span>percell <span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl   <span class="co"># point-by-point</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>See <a href="./inversion.html">Inversion</a> for the parameterizations, the link to ICESHEET’s hand-tuned shear-stress domains, and a resolution test for the number of tiles.</p>
 <div class="callout callout-style-default callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -385,11 +397,11 @@ Tip
 </section>
 <section id="netcdf-io" class="level2">
 <h2 class="anchored" data-anchor-id="netcdf-io">NetCDF I/O</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">NCDatasets</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ_b, mask, dx, dy, x, y)</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">NCDatasets</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>inp <span class="op">=</span> <span class="fu">load_plastic_inputs</span>(<span class="st">"inputs.nc"</span>)             <span class="co"># (; z_b, τ_b, mask, dx, dy, x, y)</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="caveats" class="level2">
 <h2 class="anchored" data-anchor-id="caveats">Caveats</h2>

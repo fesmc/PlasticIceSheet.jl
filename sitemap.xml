@@ -2,18 +2,22 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://fesmc.github.io/PlasticIceSheet.jl/PLAN.html</loc>
-    <lastmod>2026-06-16T22:36:08.999Z</lastmod>
+    <lastmod>2026-06-17T13:08:04.399Z</lastmod>
   </url>
   <url>
     <loc>https://fesmc.github.io/PlasticIceSheet.jl/algorithms.html</loc>
-    <lastmod>2026-06-16T22:36:08.999Z</lastmod>
+    <lastmod>2026-06-17T13:08:04.399Z</lastmod>
+  </url>
+  <url>
+    <loc>https://fesmc.github.io/PlasticIceSheet.jl/inversion.html</loc>
+    <lastmod>2026-06-17T13:08:04.399Z</lastmod>
   </url>
   <url>
     <loc>https://fesmc.github.io/PlasticIceSheet.jl/usage.html</loc>
-    <lastmod>2026-06-16T22:36:08.999Z</lastmod>
+    <lastmod>2026-06-17T13:08:04.399Z</lastmod>
   </url>
   <url>
     <loc>https://fesmc.github.io/PlasticIceSheet.jl/index.html</loc>
-    <lastmod>2026-06-16T22:36:08.999Z</lastmod>
+    <lastmod>2026-06-17T13:08:04.399Z</lastmod>
   </url>
 </urlset>

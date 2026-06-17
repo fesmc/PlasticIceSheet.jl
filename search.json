@@ -147,6 +147,55 @@
     "text": "10. What was deliberately dropped\nRelative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline. See the Design notes for the full accounting."
   },
   {
+    "objectID": "inversion.html",
+    "href": "inversion.html",
+    "title": "Inverting basal shear stress",
+    "section": "",
+    "text": "The plastic solve turns a margin, a bed, and a basal-shear-stress field \\tau_b into an ice sheet. \\tau_b carries essentially all of the reconstruction’s freedom, so the practical question is the inverse one: what \\tau_b makes the reconstruction match data? This page covers how that inverse problem is posed, the two parameterizations of \\tau_b the examples provide (and how to switch between them), and how this relates to — and automates — the hand-tuned shear-stress domains of ICESHEET (Gowan et al. 2016, 2021).\nThe gradient machinery itself (implicit differentiation of the converged eikonal) lives in Algorithms §7; here we use it."
+  },
+  {
+    "objectID": "inversion.html#the-inverse-problem",
+    "href": "inversion.html#the-inverse-problem",
+    "title": "Inverting basal shear stress",
+    "section": "The inverse problem",
+    "text": "The inverse problem\nPick an objective on the reconstruction and minimise it over \\tau_b. For present-day ice the natural target is the observed surface, through surface_misfit:\n\n\\min_{\\tau_b}\\; \\big\\langle\\, (z_s(\\tau_b) - z_s^{\\text{obs}})^2 \\,\\big\\rangle_{\\text{mask}},\n\\qquad z_s(\\tau_b) = z_b + H(\\tau_b).\n\ndifferentiable_thickness gives \\partial H/\\partial\\tau_b by reverse-mode AD, so any gradient optimiser (the examples use Adam) drives the misfit down. The grounded mask is the prescribed margin — an ICESHEET input, not something inverted — so the recovered ice extent always equals the mask; only the geometry inside it is fit.\nThe number of free parameters in \\tau_b should match what the target data can resolve. A dense present-day surface constrains a dense field; a sparse paleo target (relative sea level) constrains only a handful of regional values. The two parameterizations below sit at those two ends."
+  },
+  {
+    "objectID": "inversion.html#two-parameterizations",
+    "href": "inversion.html#two-parameterizations",
+    "title": "Inverting basal shear stress",
+    "section": "Two parameterizations",
+    "text": "Two parameterizations\nThe example examples/invert_taub_greenland.jl implements both and switches between them with a single environment variable, METHOD:\njulia --project=examples examples/invert_taub_greenland.jl                  # METHOD=tiled (default)\nMETHOD=percell julia --project=examples examples/invert_taub_greenland.jl   # point-by-point\nEverything downstream — the objective, the Adam loop, the outputs — is shared; only the map from optimisation parameters to the \\tau_b field differs.\n\nPoint-by-point (METHOD=percell)\nA full per-cell \\tau_b field, regularized to a length scale REG_KM by a Gaussian-blur reparameterization: optimise a raw field \\varphi and set\n\n\\tau_b = \\operatorname{clamp}\\big(K_x\\,\\varphi\\,K_y\\big),\n\nwith K_x, K_y separable 1-D Gaussian smoothers (\\sigma = \\texttt{REG\\_KM}/\\Delta x cells). Being linear, the blur differentiates cleanly under Zygote, and it guarantees \\tau_b varies only on scales \\gtrsim REG_KM regardless of the data fit. Many effective degrees of freedom; fits a dense observed surface closely (on Greenland GRL-32KM, ~85 m rmse).\n\n\nTiled (METHOD=tiled, default)\nA low-dimensional, paleo-transferable parameterization — the automatic version of ICESHEET’s hand-tuned shear-stress domains. Cells are grouped into tiles defined only from data available for an unknown ice sheet: bedrock roughness (windowed standard deviation of z_b, binned into N_ROUGH quantile classes) crossed with a sediment mask (z_sed, split soft/hard at SED_THRESH). The ice thickness and ice-derived drainage basins are never used to draw the tiles. Each tile d carries one scalar \\theta_d:\n\n\\tau_b(\\mathbf x) = \\operatorname{clamp}\\Big(\\textstyle\\sum_d \\theta_d\\, \\mathbb 1[\\,\\mathbf x \\in d\\,]\\Big),\n\nembedded via a one-hot selector matrix (linear, hence Zygote-friendly). The default is N_ROUGH = 4 × 2 sediment classes = 8 tiles. The observed surface enters only as the calibration target — exactly the modern-surface calibration Gowan used for Greenland and Antarctica, and the slot a relative-sea-level objective would occupy for a paleo reconstruction."
+  },
+  {
+    "objectID": "inversion.html#relation-to-icesheet-gowan-et-al.",
+    "href": "inversion.html#relation-to-icesheet-gowan-et-al.",
+    "title": "Inverting basal shear stress",
+    "section": "Relation to ICESHEET / Gowan et al.",
+    "text": "Relation to ICESHEET / Gowan et al.\nICESHEET (Gowan et al. 2016) is the same perfectly-plastic, equilibrium forward model. In PaleoMIST (Gowan et al. 2021) \\tau_b was chosen by:\n\nTarget. Relative sea level through a GIA model for the paleo ice sheets (adjust \\tau_b to maximise LGM volume, reduce it through deglaciation to fit postglacial sea-level indicators), plus geological margins; and the modern surface for Greenland and Antarctica.\nDomains. Defined by topographic variability (mountainous vs flat) refined by surficial geology (continuous sediment → low \\tau_b; hard/discontinuous → high), with boundaries on fjords, mountain ranges, and the flat interior.\nTuning. Manual and iterative — repeated by hand until the fit was acceptable.\n\nThe tiled method reproduces this logic but automates both halves: the domains come from bed roughness + sediment programmatically, and the per-domain values come from gradient descent rather than hand-tuning. On Greenland it recovers exactly Gowan’s premise — soft- sediment tiles collapse to 5–32 kPa, hard-bed tiles sit at 60–130 kPa."
+  },
+  {
+    "objectID": "inversion.html#how-many-tiles-a-resolution-test",
+    "href": "inversion.html#how-many-tiles-a-resolution-test",
+    "title": "Inverting basal shear stress",
+    "section": "How many tiles? A resolution test",
+    "text": "How many tiles? A resolution test\nThe one judgement ICESHEET left to intuition — how many domains — can be made quantitative. examples/invert_taub_sweep_greenland.jl sweeps the tile count and plots surface-misfit rmse against the number of free parameters; the knee of that curve is the data-supported resolution. On Greenland GRL-32KM:\n\nSediment geology dominates, not roughness count. A single hard/soft split (2 tiles) drops rmse from 514 → 356 m — more than eight roughness-only tiles achieve (446 m).\nThe knee is early — ~6–8 tiles. Beyond it the curve flattens (6 tiles → 333 m, 15 tiles → 327 m): extra parameters do not earn their keep.\nAn irreducible floor. Even the best tiling (~327 m) sits well above the per-cell fit (~85 m), so a substantial part of the surface signal reflects \\tau_b variability that static bed roughness and sediment cannot explain (basal thermal/hydrological state)."
+  },
+  {
+    "objectID": "inversion.html#conditioning-note-flat-vs-full",
+    "href": "inversion.html#conditioning-note-flat-vs-full",
+    "title": "Inverting basal shear stress",
+    "section": "Conditioning note: :flat vs :full",
+    "text": "Conditioning note: :flat vs :full\nThe inversions use mode = :flat. The :full adjoint forms a dense Jacobian over the whole grid, whose direct linear solve becomes singular/ill-posed on large grids; :flat gives a well-conditioned eikonal adjoint and ties \\tau_b directly to surface slope, which is the more natural object when fitting a surface. For finer grids the per-cell gradient cost is dominated by that dense solve — see the differentiable_thickness docstring for the iterative-solver option."
+  },
+  {
+    "objectID": "inversion.html#toward-a-paleo-rsl-reconstruction",
+    "href": "inversion.html#toward-a-paleo-rsl-reconstruction",
+    "title": "Inverting basal shear stress",
+    "section": "Toward a paleo (RSL) reconstruction",
+    "text": "Toward a paleo (RSL) reconstruction\nThe tiled parameterization is the bridge to a genuine paleo reconstruction: keep the bed-derived tiles, and replace the observed-surface objective with relative sea level routed through a GIA model. Because the tiles need no ice-sheet knowledge to define, the same setup transfers to an ice sheet whose geometry is unknown — which is exactly the regime ICESHEET was built for, and where reducing the parameter count is not optional but required."
+  },
+  {
     "objectID": "usage.html",
     "href": "usage.html",
     "title": "Usage",
@@ -179,7 +228,7 @@
     "href": "usage.html#inverting-for-tau_b",
     "title": "Usage",
     "section": "Inverting for \\tau_b",
-    "text": "Inverting for \\tau_b\nThe solver is differentiable with respect to \\tau_b. See Algorithms §7 for the theory.\n\nForward mode — scalar / low-dimensional \\tau_b\nusing ForwardDiff\nloss(τ_b) = surface_misfit(first(solve(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)\ng = ForwardDiff.derivative(loss, 1.0e5)\n\n\nReverse mode — full per-cell \\tau_b field\nLoad the extension triggers, then differentiate differentiable_thickness with any reverse-mode AD:\nusing ImplicitDifferentiation, ADTypes, ForwardDiff, Zygote\n\nloss(τ_b) = surface_misfit(differentiable_thickness(τ_b, z_b, mask; dx, dy) .+ z_b, z_s_obs, mask)\ng = Zygote.gradient(loss, τ_b)[1]      # gradient w.r.t. the whole τ_b field\nA complete, runnable Adam-based recovery of a spatially-varying \\tau_b from an observed surface is in examples/invert_tau.jl. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.\n\n\n\n\n\n\nTip\n\n\n\nThe default reverse-mode linear solver is direct (robust for modest grids). For very large fields, pass an iterative solver — see the differentiable_thickness docstring."
+    "text": "Inverting for \\tau_b\nThe solver is differentiable with respect to \\tau_b. See Algorithms §7 for the theory.\n\nForward mode — scalar / low-dimensional \\tau_b\nusing ForwardDiff\nloss(τ_b) = surface_misfit(first(solve(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)\ng = ForwardDiff.derivative(loss, 1.0e5)\n\n\nReverse mode — full per-cell \\tau_b field\nLoad the extension triggers, then differentiate differentiable_thickness with any reverse-mode AD:\nusing ImplicitDifferentiation, ADTypes, ForwardDiff, Zygote\n\nloss(τ_b) = surface_misfit(differentiable_thickness(τ_b, z_b, mask; dx, dy) .+ z_b, z_s_obs, mask)\ng = Zygote.gradient(loss, τ_b)[1]      # gradient w.r.t. the whole τ_b field\nA complete, runnable Adam-based recovery of a spatially-varying \\tau_b from an observed surface is in examples/invert_tau.jl. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.\n\n\nChoosing a parameterization\nHow you parameterize \\tau_b — a regularized per-cell field, or a few bed-derived tiles — matters as much as the gradient. The real-data Greenland example examples/invert_taub_greenland.jl implements both and switches with one env var:\njulia --project=examples examples/invert_taub_greenland.jl                  # tiled (default)\nMETHOD=percell julia --project=examples examples/invert_taub_greenland.jl   # point-by-point\nSee Inversion for the parameterizations, the link to ICESHEET’s hand-tuned shear-stress domains, and a resolution test for the number of tiles.\n\n\n\n\n\n\nTip\n\n\n\nThe default reverse-mode linear solver is direct (robust for modest grids). For very large fields, pass an iterative solver — see the differentiable_thickness docstring."
   },
   {
     "objectID": "usage.html#netcdf-io",
