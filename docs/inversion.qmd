@@ -1,0 +1,131 @@
+---
+title: "Inverting basal shear stress"
+---
+
+The plastic solve turns a margin, a bed, and a basal-shear-stress field $\tau_b$ into an ice
+sheet. $\tau_b$ carries essentially all of the reconstruction's freedom, so the practical
+question is the **inverse** one: what $\tau_b$ makes the reconstruction match data? This page
+covers how that inverse problem is posed, the two parameterizations of $\tau_b$ the examples
+provide (and how to switch between them), and how this relates to — and automates — the
+hand-tuned shear-stress domains of ICESHEET (Gowan et al. 2016, 2021).
+
+The gradient machinery itself (implicit differentiation of the converged eikonal) lives in
+[Algorithms §7](algorithms.qmd#sec-ad); here we use it.
+
+## The inverse problem
+
+Pick an objective on the reconstruction and minimise it over $\tau_b$. For present-day ice
+the natural target is the observed surface, through `surface_misfit`:
+
+$$
+\min_{\tau_b}\; \big\langle\, (z_s(\tau_b) - z_s^{\text{obs}})^2 \,\big\rangle_{\text{mask}},
+\qquad z_s(\tau_b) = z_b + H(\tau_b).
+$$
+
+`differentiable_thickness` gives $\partial H/\partial\tau_b$ by reverse-mode AD, so any
+gradient optimiser (the examples use Adam) drives the misfit down. The grounded `mask` is the
+prescribed margin — an ICESHEET input, **not** something inverted — so the recovered ice
+*extent* always equals the mask; only the *geometry* inside it is fit.
+
+The number of free parameters in $\tau_b$ should match what the target data can resolve. A
+dense present-day surface constrains a dense field; a sparse paleo target (relative sea
+level) constrains only a handful of regional values. The two parameterizations below sit at
+those two ends.
+
+## Two parameterizations
+
+The example
+[`examples/invert_taub_greenland.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl)
+implements both and switches between them with a single environment variable, `METHOD`:
+
+```bash
+julia --project=examples examples/invert_taub_greenland.jl                  # METHOD=tiled (default)
+METHOD=percell julia --project=examples examples/invert_taub_greenland.jl   # point-by-point
+```
+
+Everything downstream — the objective, the Adam loop, the outputs — is shared; only the map
+from optimisation parameters to the $\tau_b$ field differs.
+
+### Point-by-point (`METHOD=percell`)
+
+A full per-cell $\tau_b$ field, regularized to a length scale `REG_KM` by a **Gaussian-blur
+reparameterization**: optimise a raw field $\varphi$ and set
+
+$$
+\tau_b = \operatorname{clamp}\big(K_x\,\varphi\,K_y\big),
+$$
+
+with $K_x, K_y$ separable 1-D Gaussian smoothers ($\sigma = \texttt{REG\_KM}/\Delta x$ cells).
+Being linear, the blur differentiates cleanly under Zygote, and it *guarantees* $\tau_b$
+varies only on scales $\gtrsim$ `REG_KM` regardless of the data fit. Many effective degrees of
+freedom; fits a dense observed surface closely (on Greenland GRL-32KM, ~85 m rmse).
+
+### Tiled (`METHOD=tiled`, default)
+
+A low-dimensional, **paleo-transferable** parameterization — the automatic version of
+ICESHEET's hand-tuned shear-stress domains. Cells are grouped into tiles defined **only from
+data available for an unknown ice sheet**: bedrock roughness (windowed standard deviation of
+$z_b$, binned into `N_ROUGH` quantile classes) crossed with a sediment mask (`z_sed`,
+split soft/hard at `SED_THRESH`). The ice thickness and ice-derived drainage basins are never
+used to draw the tiles. Each tile $d$ carries one scalar $\theta_d$:
+
+$$
+\tau_b(\mathbf x) = \operatorname{clamp}\Big(\textstyle\sum_d \theta_d\, \mathbb 1[\,\mathbf x \in d\,]\Big),
+$$
+
+embedded via a one-hot selector matrix (linear, hence Zygote-friendly). The default is
+`N_ROUGH = 4` × 2 sediment classes = **8 tiles**. The observed surface enters *only* as the
+calibration target — exactly the modern-surface calibration Gowan used for Greenland and
+Antarctica, and the slot a relative-sea-level objective would occupy for a paleo
+reconstruction.
+
+## Relation to ICESHEET / Gowan et al.
+
+ICESHEET (Gowan et al. 2016) is the same perfectly-plastic, equilibrium forward model. In
+PaleoMIST (Gowan et al. 2021) $\tau_b$ was chosen by:
+
+- **Target.** Relative sea level through a GIA model for the paleo ice sheets (adjust
+  $\tau_b$ to maximise LGM volume, reduce it through deglaciation to fit postglacial
+  sea-level indicators), plus geological margins; and the **modern surface** for Greenland and
+  Antarctica.
+- **Domains.** Defined by topographic variability (mountainous vs flat) refined by surficial
+  geology (continuous sediment → low $\tau_b$; hard/discontinuous → high), with boundaries on
+  fjords, mountain ranges, and the flat interior.
+- **Tuning.** Manual and iterative — repeated by hand until the fit was acceptable.
+
+The `tiled` method reproduces this logic but **automates both halves**: the domains come from
+bed roughness + sediment programmatically, and the per-domain values come from gradient
+descent rather than hand-tuning. On Greenland it recovers exactly Gowan's premise — soft-
+sediment tiles collapse to 5–32 kPa, hard-bed tiles sit at 60–130 kPa.
+
+## How many tiles? A resolution test
+
+The one judgement ICESHEET left to intuition — how many domains — can be made quantitative.
+[`examples/invert_taub_sweep_greenland.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_sweep_greenland.jl)
+sweeps the tile count and plots surface-misfit rmse against the number of free parameters; the
+**knee** of that curve is the data-supported resolution. On Greenland GRL-32KM:
+
+- **Sediment geology dominates, not roughness count.** A single hard/soft split (2 tiles)
+  drops rmse from 514 → 356 m — more than eight roughness-only tiles achieve (446 m).
+- **The knee is early — ~6–8 tiles.** Beyond it the curve flattens (6 tiles → 333 m, 15
+  tiles → 327 m): extra parameters do not earn their keep.
+- **An irreducible floor.** Even the best tiling (~327 m) sits well above the per-cell fit
+  (~85 m), so a substantial part of the surface signal reflects $\tau_b$ variability that
+  static bed roughness and sediment cannot explain (basal thermal/hydrological state).
+
+## Conditioning note: `:flat` vs `:full`
+
+The inversions use `mode = :flat`. The `:full` adjoint forms a dense Jacobian over the whole
+grid, whose direct linear solve becomes singular/ill-posed on large grids; `:flat` gives a
+well-conditioned eikonal adjoint and ties $\tau_b$ directly to surface slope, which is the
+more natural object when fitting a surface. For finer grids the per-cell gradient cost is
+dominated by that dense solve — see the `differentiable_thickness` docstring for the
+iterative-solver option.
+
+## Toward a paleo (RSL) reconstruction
+
+The `tiled` parameterization is the bridge to a genuine paleo reconstruction: keep the
+bed-derived tiles, and replace the observed-surface objective with relative sea level routed
+through a GIA model. Because the tiles need no ice-sheet knowledge to define, the same setup
+transfers to an ice sheet whose geometry is unknown — which is exactly the regime ICESHEET
+was built for, and where reducing the parameter count is not optional but required.

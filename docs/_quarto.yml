@@ -16,6 +16,8 @@ website:
         file: index.qmd
       - text: "Algorithms"
         file: algorithms.qmd
+      - text: "Inversion"
+        file: inversion.qmd
       - text: "Usage"
         file: usage.qmd
       - text: "Design notes"

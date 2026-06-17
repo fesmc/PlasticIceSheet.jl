@@ -139,6 +139,21 @@ surface is in
 It drives the misfit down by four orders of magnitude and recovers the two-region truth to
 within a fraction of a kPa.
 
+### Choosing a parameterization
+
+How you parameterize $\tau_b$ — a regularized per-cell field, or a few bed-derived tiles —
+matters as much as the gradient. The real-data Greenland example
+[`examples/invert_taub_greenland.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl)
+implements both and switches with one env var:
+
+```bash
+julia --project=examples examples/invert_taub_greenland.jl                  # tiled (default)
+METHOD=percell julia --project=examples examples/invert_taub_greenland.jl   # point-by-point
+```
+
+See [Inversion](inversion.qmd) for the parameterizations, the link to ICESHEET's hand-tuned
+shear-stress domains, and a resolution test for the number of tiles.
+
 ::: {.callout-tip}
 The default reverse-mode linear solver is direct (robust for modest grids). For very large
 fields, pass an iterative solver — see the `differentiable_thickness` docstring.
