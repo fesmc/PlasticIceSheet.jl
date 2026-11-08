@@ -1,0 +1,5 @@
+[deps]
+PlasticIceSheet = "93662aab-ba50-4a1d-a5d1-023c4578c01c"
+
+[sources]
+PlasticIceSheet = {path = "../.."}
