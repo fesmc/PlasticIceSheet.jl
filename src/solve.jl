@@ -204,7 +204,8 @@ function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
     bc = _bc_flat.(z_b, Ref(p))
     w = _solve_w(τ_bf, z_b, mask, bc, dx, dy, p, mode; max_sweeps, tol, n_outer, outer_tol, relax)
 
-    H = @. ifelse(mask, sqrt(max(w, zero(eltype(w)))), zero(eltype(w)))
+    z0 = zero(eltype(w))   # not inside `@.`, which would dot `zero`/`eltype` and defeat inference
+    H = @. ifelse(mask, sqrt(max(w, z0)), z0)
     z_s = @. ifelse(mask, H + z_b, z_b)
     return z_s, H
 end
