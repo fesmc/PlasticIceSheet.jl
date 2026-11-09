@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.11.9">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>kryos-coupling – PlasticIceSheet.jl</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-48366446b25c0eb9a9eed8d4d8517111.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-fixed quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark" aria-label="Site">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">PlasticIceSheet.jl</span>
+    </a>
+  </div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="./index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./algorithms.html"> 
+<span class="menu-text">Algorithms</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./inversion.html"> 
+<span class="menu-text">Inversion</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./usage.html"> 
+<span class="menu-text">Usage</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./PLAN.html"> 
+<span class="menu-text">Design notes</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/fesmc/PlasticIceSheet.jl"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+            <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" aria-labelledby="toc-title" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#calling-plasticicesheet.jl-from-kryos-fortran" id="toc-calling-plasticicesheet.jl-from-kryos-fortran" class="nav-link active" data-scroll-target="#calling-plasticicesheet.jl-from-kryos-fortran">Calling PlasticIceSheet.jl from kryos (Fortran)</a>
+  <ul class="collapse">
+  <li><a href="#routes" id="toc-routes" class="nav-link" data-scroll-target="#routes">Routes</a></li>
+  <li><a href="#key-problems-for-ad-at-kryos-sizes" id="toc-key-problems-for-ad-at-kryos-sizes" class="nav-link" data-scroll-target="#key-problems-for-ad-at-kryos-sizes">Key problems for AD at kryos sizes</a></li>
+  <li><a href="#threading-instances-robustness-not-tested-from-reasoning" id="toc-threading-instances-robustness-not-tested-from-reasoning" class="nav-link" data-scroll-target="#threading-instances-robustness-not-tested-from-reasoning">Threading, instances, robustness (not tested, from reasoning)</a></li>
+  <li><a href="#tau_b-optimisation-design-notes-not-prototyped" id="toc-tau_b-optimisation-design-notes-not-prototyped" class="nav-link" data-scroll-target="#tau_b-optimisation-design-notes-not-prototyped">tau_b optimisation (design notes, not prototyped)</a></li>
+  <li><a href="#status-paused.-if-resumed" id="toc-status-paused.-if-resumed" class="nav-link" data-scroll-target="#status-paused.-if-resumed">Status: paused. If resumed</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content" tabindex="-1"><header id="title-block-header" class="quarto-title-block"></header>
+
+
+
+
+<section id="calling-plasticicesheet.jl-from-kryos-fortran" class="level1">
+<h1>Calling PlasticIceSheet.jl from kryos (Fortran)</h1>
+<p>Status: PAUSED (scope change). Forward-solve routes are prototyped and measured; the adjoint at kryos grid sizes and the tau_b-optimisation designs are not. Prototype: <code>kryos-embed/</code>.</p>
+<p>Setup: Levante, Julia 1.12.6 (juliaup), ifx 2023.2.1, AMD EPYC 7763, 1 Julia thread, synthetic case (ellipse mask, dx = 32 km, same formulas in Fortran and Julia). All routes reproduce the Julia-native result to the printed digits (flat 200x300: Hmax 7080.658, Hmean 3978.163627).</p>
+<section id="routes" class="level2">
+<h2 class="anchored" data-anchor-id="routes">Routes</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 12%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Route</th>
+<th>Works?</th>
+<th>Startup</th>
+<th>First call</th>
+<th>Steady 200x300 flat / full</th>
+<th>Memory</th>
+<th>AD</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>native Julia (reference)</td>
+<td>yes</td>
+<td>-</td>
+<td>4.0 s (JIT)</td>
+<td>4.9 ms / 0.15-0.35 s</td>
+<td>600 MB</td>
+<td>yes</td>
+<td>baseline</td>
+</tr>
+<tr class="even">
+<td>a. embed libjulia, C function pointers (<code>@cfunction</code>, no Julia objects cross)</td>
+<td>yes</td>
+<td>default: jl_init 0.15 s + <code>using</code> 1.6-3.8 s; sysimage: 0.5-2.2 s total</td>
+<td>default 2.8-3.1 s (JIT); sysimage 7 ms</td>
+<td>4.6 ms / 0.5 s (sysimage, noisy)</td>
+<td>360-440 MB</td>
+<td>yes (see below)</td>
+<td>works; best if AD needed</td>
+</tr>
+<tr class="odd">
+<td>b. <code>juliac --trim=safe</code> shared lib, <code>@ccallable</code></td>
+<td>yes, forward only</td>
+<td>~0.1 s</td>
+<td>0.05-0.25 s</td>
+<td>4.7 ms / 0.15 s</td>
+<td>64-100 MB</td>
+<td>no (Zygote/ImplicitDifferentiation not trim-compatible, not tried)</td>
+<td>best for forward-only production: 2.6 MB lib, no Julia install at runtime beyond libjulia, built in 12 s</td>
+</tr>
+<tr class="even">
+<td>c.&nbsp;persistent worker over FIFOs + /dev/shm files</td>
+<td>yes</td>
+<td>1.8 s server warmup (once)</td>
+<td>1.8-2.7 s</td>
+<td>6.6 ms / 0.2-0.65 s round trip</td>
+<td>separate process</td>
+<td>yes (worker can run anything)</td>
+<td>robust, decoupled, simplest to deploy; I/O adds ~2 ms at 200x300</td>
+</tr>
+<tr class="odd">
+<td>c’. one-shot <code>julia</code> per call</td>
+<td>measured startup only</td>
+<td>20.6 s default (incl.&nbsp;precompile once), 0.68 s with sysimage</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>yes</td>
+<td>only for rare calls</td>
+</tr>
+</tbody>
+</table>
+<p>400x400: flat 12.4 ms, full 0.5-2.0 s (varies by node load; the full mode time is noisy, repeat before quoting).</p>
+<p>Details: - a. <code>jl_init</code> / <code>jl_init_with_image</code> once; <code>using KryosEmbed</code>; <code>jl_eval_string("KryosEmbed.entry_solve()")</code> returns a <code>@cfunction</code> pointer, called via <code>c_f_procpointer</code>. Arrays are Fortran memory wrapped with <code>unsafe_wrap</code> (no copy), exceptions are caught in Julia and returned as a code plus <code>lasterr()</code>, so no GC rooting is needed on the Fortran side. Custom sysimage (PackageCompiler): 377 MB, 193 s build, 14 GB peak RAM (needs <code>--mem=32G</code>; the default shared allocation was OOM-killed). The sysimage removes the JIT first-call latency (2.8 s to 7 ms). - b. Needed one fix in the package: <code>solve</code> returned <code>Union{Matrix{Any},Matrix{Float64}}</code> because <code>@.</code> dotted <code>zero(eltype(w))</code>, which also allocated temporaries; fixed on this branch (commit on <code>kryos-embed</code>), after which <code>--trim=safe</code> verifies. The lib initialises Julia automatically on first call (no <code>jl_init</code> needed from Fortran). It still links libjulia and libjulia-internal at runtime (rpath). - Gradient through route a (flat mode, reverse-mode implicit differentiation, Zygote): works from Fortran. 48x60: 0.85 s steady with the dense direct solver; with the matrix-free Krylov solver 5.0 s (slower). 96x120 Krylov was still running when work stopped (see <code>kryos-embed/grad-*.out</code> on Levante, if finished). 200x300 untested.</p>
+</section>
+<section id="key-problems-for-ad-at-kryos-sizes" class="level2">
+<h2 class="anchored" data-anchor-id="key-problems-for-ad-at-kryos-sizes">Key problems for AD at kryos sizes</h2>
+<ul>
+<li>The extension default (<code>MatrixRepresentation</code> + <code>DirectLinearSolver</code>) forms a dense Jacobian of N = nx*ny states: 200x300 is 60000^2 doubles = 29 GB and a dense factorisation. Not usable. The Krylov option is slower than dense even at 48x60 and is unproven at scale.</li>
+<li>The flat-mode Godunov residual is lower-triangular when cells are ordered by increasing w (each update only depends on smaller neighbours). The exact adjoint is then a back-substitution in descending-w order, O(N log N), no linear solver. This is the structural fix I would implement (hand-written <code>rrule</code> or custom adjoint) instead of ImplicitDifferentiation for the large grids. Not implemented. <code>:full</code> mode (gradient coupling through grad w) is not triangular; needs a separate treatment or an iterative solve.</li>
+<li>AD compile size: Zygote + ImplicitDifferentiation + ForwardDiff make the sysimage 377 MB; trim is not an option for the AD path.</li>
+</ul>
+</section>
+<section id="threading-instances-robustness-not-tested-from-reasoning" class="level2">
+<h2 class="anchored" data-anchor-id="threading-instances-robustness-not-tested-from-reasoning">Threading, instances, robustness (not tested, from reasoning)</h2>
+<ul>
+<li>Julia runs one thread here; the solver is serial. The Julia runtime installs signal handlers and starts GC threads; coexistence with OpenMP and MPI in the kryos process was not tested (the route-a program ran standalone). Julia’s OpenBLAS uses suffixed ILP64 symbols, so a clash with the Fortran BLAS/MKL is unlikely but unchecked.</li>
+<li>Only one Julia runtime per process, so multiple kryos ice instances share it; calls must be serialised (or use route c with one worker per instance).</li>
+<li>Route b has no Julia code evaluation at runtime and the smallest failure surface; route c isolates crashes.</li>
+</ul>
+</section>
+<section id="tau_b-optimisation-design-notes-not-prototyped" class="level2">
+<h2 class="anchored" data-anchor-id="tau_b-optimisation-design-notes-not-prototyped">tau_b optimisation (design notes, not prototyped)</h2>
+<p>Gowan et al.&nbsp;(ICESHEET <code>global/adjust_loop.sh</code>, <code>adjust_ss.f90</code>): tau_b is set per domain polygon (domains_min/max.txt, ~215 domains), with a time-dependent max-to-min ramp from <code>adjust_*.txt</code> (columns: domain, time of max, time of min, min value or 0 for domains_min). Present-day: brute-force loop run -&gt; compare with modern thickness -&gt; per-domain mean difference binned to a multiplicative step (up to +-5 %, scaled by 0.5) on both min and max. Paleo: hand tuning against RSL and far-field sea level (readme.txt records the reasoning per iteration), with GIA in the loop.</p>
+<p>Recommendation (reasoned, untested): 1. (iii) offline present-day inversion in Julia (AD or even the Gowan rule) for modern sheets, then fix tau_b in kryos. Cheap, no coupling needed; forward model in kryos via route b. 2. (ii) outer-loop calibration of the few per-domain paleo parameters against RSL/modern thickness with GIA in the loop: gradient-free/ensemble (tens of parameters, each run a full VILMA2 transient) since the adjoint does not cover GIA. Forward calls from kryos then need only route b (or a Fortran port). 3. (i) per-step inversion against a target thickness is circular for a reconstruction (the target is the output); skip. So AD is useful offline, not inside the kryos loop; this weakens the case for route a over b.</p>
+</section>
+<section id="status-paused.-if-resumed" class="level2">
+<h2 class="anchored" data-anchor-id="status-paused.-if-resumed">Status: paused. If resumed</h2>
+<ol type="1">
+<li>Check <code>kryos-embed/grad-*.out</code> for 96x120 (and 200x300) Krylov timings.</li>
+<li>Implement the descending-w triangular adjoint for flat mode and compare with the ImplicitDifferentiation gradient on 48x60.</li>
+<li>Test route a/b inside a real kryos build: MPI/OpenMP coexistence, signal handling, two instances, <code>-ljulia</code> link flags in the kryos Makefile on ifx.</li>
+<li>Rebuild the sysimage with the fixed <code>solve</code> (the one measured may predate it) and repeat the full-mode timings several times (noisy).</li>
+<li>Pin cpu_target for the sysimage to the Levante node types.</li>
+</ol>
+<p>Prototype layout and build/run commands: <code>kryos-embed/README.md</code>.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/fesmc\.github\.io\/PlasticIceSheet\.jl\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+          if (!link.classList.contains('no-external-icon')) {
+          }
+        }
+      }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
+          if (lineIds.length > 0) {
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            placeBand(gutterDiv, el, lastEl);
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
