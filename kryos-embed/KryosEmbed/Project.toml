@@ -1,0 +1,13 @@
+name = "KryosEmbed"
+uuid = "5b0d2e7c-3c1f-4a55-9c0e-7a6f1c2d9e11"
+version = "0.1.0"
+
+[deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+ImplicitDifferentiation = "57b37032-215b-411a-8a7c-41a003a55207"
+PlasticIceSheet = "93662aab-ba50-4a1d-a5d1-023c4578c01c"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[sources]
+PlasticIceSheet = {path = "../.."}
