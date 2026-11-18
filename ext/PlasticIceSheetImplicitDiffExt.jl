@@ -10,13 +10,13 @@ module PlasticIceSheetImplicitDiffExt
 # (e.g. Zygote) gets the gradient through ImplicitDifferentiation's ChainRules rule.
 
 using PlasticIceSheet
-using PlasticIceSheet: _solve_w, _bc_flat, godunov_residual, PlasticParams
+using PlasticIceSheet: _solve_w, _bc_w, _as_field, godunov_residual, PlasticParams
 using ImplicitDifferentiation: ImplicitFunction, MatrixRepresentation, DirectLinearSolver
 using ADTypes: AutoForwardDiff
 import ForwardDiff  # provides the backend used to differentiate the conditions
 
 """
-    differentiable_thickness(τ_b, z_b, mask; dx, dy, mode=:full, params=PlasticParams(),
+    differentiable_thickness(τ_b, z_b, mask; dx, dy, z_ss=0.0, mode=:full, params=PlasticParams(),
                              max_sweeps, tol, n_outer, outer_tol,
                              representation=MatrixRepresentation(),
                              linear_solver=DirectLinearSolver())
@@ -34,7 +34,7 @@ the eikonal adjoint's characteristics span the domain).
 """
 function PlasticIceSheet.differentiable_thickness(
         τ_b::AbstractMatrix, z_b::AbstractMatrix, mask::AbstractMatrix{Bool};
-        dx::Real, dy::Real, mode::Symbol = :full,
+        dx::Real, dy::Real, z_ss = 0.0, mode::Symbol = :full,
         params::PlasticParams = PlasticParams(),
         max_sweeps::Int = 200, tol = 1e-6, n_outer::Int = 200, outer_tol = 1e-5,
         relax = 0.5,
@@ -44,7 +44,7 @@ function PlasticIceSheet.differentiable_thickness(
     size(z_b) == size(mask) == size(τ_b) ||
         throw(DimensionMismatch("τ_b, z_b and mask must share the same shape"))
 
-    bc = _bc_flat.(z_b, Ref(params))
+    bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), params)
     shape = size(z_b)
     # Constant (non-differentiated) context carried alongside the differentiated `τ_b`.
     # `:full` needs a tightly-converged forward solve (small residual) for the implicit

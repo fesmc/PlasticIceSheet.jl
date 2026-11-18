@@ -40,6 +40,30 @@ end
     @test all(H[1, :] .== 0) && all(H[nx, :] .== 0)
 end
 
+@testset "marine margins with a sea-level field" begin
+    # Strip on a flat bed below sea level, uniform in y; sea level differs at the two
+    # margins, so each side grows from its own flotation thickness: H = √(H_flt² + c d).
+    nx, ny = 60, 6
+    dx = dy = 1000.0
+    τ_b = 1.0e5
+    z_b = fill(-300.0, nx, ny)
+    z_ss = [i <= nx ÷ 2 ? 0.0 : -100.0 for i in 1:nx, j in 1:ny]
+    mask = trues(nx, ny); mask[1, :] .= false; mask[nx, :] .= false
+    _, H = solve(z_b, τ_b, mask; dx, dy, z_ss, mode = :flat, max_sweeps = 400, tol = 1e-9)
+    c = 2τ_b / ρg
+    Hl, Hr = flotation_thickness(-300.0, 0.0, p), flotation_thickness(-300.0, -100.0, p)
+    exact(i) = min(sqrt(Hl^2 + c * dx * (i - 1)), sqrt(Hr^2 + c * dx * (nx - i)))
+    @test all(H[i, 3] ≈ exact(i) for i in 2:(nx - 1))
+    @test_throws DimensionMismatch solve(z_b, τ_b, mask; dx, dy, z_ss = zeros(3, 3))
+end
+
+@testset "unreachable ice cells get H = 0 with a warning" begin
+    mask = trues(10, 10)               # no ice-free cell anywhere
+    z_s, H = @test_logs (:warn, r"not connected") solve(zeros(10, 10), 1.0e5, mask;
+                                                        dx = 1000.0, dy = 1000.0, mode = :flat)
+    @test all(iszero, H) && all(iszero, z_s)
+end
+
 @testset "flat and full agree on a flat bed" begin
     nx, ny = 50, 50
     dx = dy = 2000.0
@@ -77,7 +101,7 @@ end
     # A central bedrock high lifts the surface above the flat-bed reconstruction.
     @test z_s_b[20, 20] > H0[20, 20]
     # The damped :full fixed point is genuinely reached (residual ≈ 0).
-    bc = PlasticIceSheet.flotation_thickness.(z_b_bump, Ref(p)) .^ 2
+    bc = flotation_thickness.(z_b_bump, 0.0, Ref(p)) .^ 2
     R = PlasticIceSheet.godunov_residual(Hb .^ 2, fill(τ_b, nx, ny), z_b_bump, mask, bc,
                                          dx, dy, p, :full)
     @test maximum(abs, R) < 1e-2

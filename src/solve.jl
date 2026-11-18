@@ -66,8 +66,8 @@ end
 
 # Both modes solve for u = H² (which is non-singular at the margin, unlike the surface
 # z_s whose driving slope τ_b/(ρ_i g H) blows up as H→0). The margin Dirichlet value is the
-# squared flotation thickness (0 on land).
-_bc_flat(z_b, p) = let h = flotation_thickness(z_b, p); h * h end
+# squared flotation thickness (0 on land). `z_ss` is a scalar or a field.
+_bc_w(z_b, z_ss, p) = flotation_thickness.(z_b, z_ss, Ref(p)) .^ 2
 
 # Central-difference gradient of a field with clamp-to-edge (one-sided at array edges).
 function _grad(f, dx, dy)
@@ -165,7 +165,7 @@ end
 # --- top-level solve --------------------------------------------------------------
 
 """
-    solve(z_b, τ_b, mask; dx, dy, mode=:full, params=PlasticParams(),
+    solve(z_b, τ_b, mask; dx, dy, z_ss=0.0, mode=:full, params=PlasticParams(),
           max_sweeps=200, tol=1e-6, n_outer=100, outer_tol=1e-3, relax=0.5)
 
 Reconstruct a perfectly-plastic, steady-state ice sheet.
@@ -175,6 +175,8 @@ Inputs (all matrices share the same `(nx, ny)` shape unless noted):
 - `τ_b`    : basal shear stress (Pa); a scalar is broadcast to a uniform field
 - `mask` : `true` where grounded ice exists; the margin is the mask boundary
 - `dx`, `dy` : grid spacings (m)
+- `z_ss` : sea level (m), scalar or field; marine margins are grounded at the flotation
+           thickness `(ρ_w/ρ_i) max(z_ss − z_b, 0)`
 
 Options:
 - `mode`  : `:full` (default, full Hamilton–Jacobi over arbitrary bed relief) or
@@ -186,26 +188,33 @@ Options:
   beds but slower. The undamped map (`relax=1`) can oscillate over strong bed relief.
 
 Returns `(z_s, H)` — ice surface elevation and thickness (m). Ice-free cells have
-`H = 0`, `z_s = z_b`.
+`H = 0`, `z_s = z_b`. Ice cells in a region with no ice-free cell (unreachable from any
+margin) also get `H = 0`, with a warning.
 
 The whole computation is differentiable w.r.t. `τ_b`; see the Algorithms page of the docs (§7).
 """
 function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
-               dx::Real, dy::Real, mode::Symbol = :full,
+               dx::Real, dy::Real, z_ss = 0.0, mode::Symbol = :full,
                params::PlasticParams = PlasticParams(),
                max_sweeps::Int = 200, tol = 1e-6,
                n_outer::Int = 100, outer_tol = 1e-3, relax = 0.5)
 
     size(z_b) == size(mask) || throw(DimensionMismatch("z_b and mask must match"))
     p = params
-    τ_bf = τ_b isa Number ? fill(float(τ_b), size(z_b)) : τ_b
-    size(τ_bf) == size(z_b) || throw(DimensionMismatch("τ_b and z_b must match"))
-
-    bc = _bc_flat.(z_b, Ref(p))
+    τ_bf = _as_field(τ_b, size(z_b), "τ_b")
+    bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), p)
     w = _solve_w(τ_bf, z_b, mask, bc, dx, dy, p, mode; max_sweeps, tol, n_outer, outer_tol, relax)
+    return _geometry_from_w(w, z_b, mask)
+end
 
+# (z_s, H) from w = H² on the ice. Ice cells the sweep never reached (Inf: an ice region
+# with no ice-free cell) get H = 0, with a warning.
+function _geometry_from_w(w, z_b, mask)
     z0 = zero(eltype(w))   # not inside `@.`, which would dot `zero`/`eltype` and defeat inference
-    H = @. ifelse(mask, sqrt(max(w, z0)), z0)
+    n_unreached = count(k -> mask[k] && !isfinite(w[k]), eachindex(w))
+    n_unreached > 0 &&
+        @warn "$n_unreached ice cells not connected to an ice-free cell (H set to 0)"
+    H = @. ifelse(mask & isfinite(w), sqrt(max(w, z0)), z0)
     z_s = @. ifelse(mask, H + z_b, z_b)
     return z_s, H
 end
