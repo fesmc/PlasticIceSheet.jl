@@ -361,10 +361,9 @@ geometry solver but is driven by climate. A complete free-margin, nonlinear-diff
 state is deliberately *not* attempted here — that is the job of a dynamic model such as
 [Yelmo](https://github.com/palma-ice/yelmo).
 
-## 10. What was deliberately dropped
+## 10. What was deliberately dropped {#sec-dropped}
 
 Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery
 unnecessary: method-of-characteristics flowline tracing, crossover detection (the
 motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level
-iteration loop, and the GMT projection/preprocessing pipeline. See the
-[Design notes](PLAN.md) for the full accounting.
+iteration loop, and the GMT projection/preprocessing pipeline.

@@ -75,7 +75,6 @@ This is a clean-room simplification and modernization of
 [Gowan et al. 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)). The core
 physics — one published equation — is retained; the ~2,600-line recursive flowline /
 crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple
-hundred lines. The [Design notes](PLAN.md) record what was kept, simplified, and dropped,
-and why.
+hundred lines. [Algorithms §10](algorithms.qmd#sec-dropped) lists what was dropped.
 
 `PlasticIceSheet.jl` is MIT-licensed.

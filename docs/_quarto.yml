@@ -1,6 +1,12 @@
 project:
   type: website
   output-dir: _site
+  # Only these pages are published; PLAN.md and kryos-coupling.md are repo-only notes.
+  render:
+    - index.qmd
+    - algorithms.qmd
+    - inversion.qmd
+    - usage.qmd
 
 website:
   title: "PlasticIceSheet.jl"
@@ -20,8 +26,6 @@ website:
         file: inversion.qmd
       - text: "Usage"
         file: usage.qmd
-      - text: "Design notes"
-        file: PLAN.md
     right:
       - icon: github
         href: https://github.com/fesmc/PlasticIceSheet.jl

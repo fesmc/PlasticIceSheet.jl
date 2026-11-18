@@ -188,7 +188,7 @@ Options:
 Returns `(z_s, H)` — ice surface elevation and thickness (m). Ice-free cells have
 `H = 0`, `z_s = z_b`.
 
-The whole computation is differentiable w.r.t. `τ_b`; see `docs/PLAN.md`.
+The whole computation is differentiable w.r.t. `τ_b`; see the Algorithms page of the docs (§7).
 """
 function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
                dx::Real, dy::Real, mode::Symbol = :full,

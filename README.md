@@ -44,8 +44,8 @@ a static Hamilton–Jacobi (eikonal) problem solved with **fast sweeping**. Sadd
 domes, and coalescing ice caps emerge automatically from the upwind viscosity solution
 — no flowline tracing, crossover detection, or saddle bookkeeping.
 
-See [`docs/PLAN.md`](docs/PLAN.md) for the full rationale of what was kept, simplified, and
-dropped relative to ICESHEET.
+See [Algorithms §10](https://fesmc.github.io/PlasticIceSheet.jl/algorithms.html#sec-dropped)
+for what was dropped relative to ICESHEET.
 
 ## Usage
 

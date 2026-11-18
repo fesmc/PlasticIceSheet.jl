@@ -4,7 +4,8 @@
 Perfectly-plastic, steady-state ice-sheet reconstruction by solving the plastic surface
 equation `|∇z_s| = τ_b / (ρ_i g (z_s − z_b))` as a static Hamilton–Jacobi (eikonal) problem
 on a grid with fast sweeping. A simplification and modernization of ICESHEET 2.0
-(Gowan et al. 2016, <https://github.com/evangowan/icesheet>); see `docs/PLAN.md`.
+(Gowan et al. 2016, <https://github.com/evangowan/icesheet>).
+Documentation: <https://fesmc.github.io/PlasticIceSheet.jl/>.
 
 Inputs: a grounded-ice `mask`, bed elevation `z_b`, and basal shear stress `τ_b`.
 Outputs: ice surface elevation `z_s` and thickness `H`. AD-friendly w.r.t. `τ_b`.
