@@ -214,7 +214,6 @@ window.Quarto = {
   <ul>
   <li><a href="#the-idea" id="toc-the-idea" class="nav-link active" data-scroll-target="#the-idea">The idea</a></li>
   <li><a href="#quick-start" id="toc-quick-start" class="nav-link" data-scroll-target="#quick-start">Quick start</a></li>
-  <li><a href="#origin" id="toc-origin" class="nav-link" data-scroll-target="#origin">Origin</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -241,39 +240,35 @@ window.Quarto = {
 </header>
 
 
-<p><code>PlasticIceSheet.jl</code> reconstructs a perfectly-plastic, steady-state ice sheet from three inputs — a grounded-ice <strong>margin/mask</strong>, a <strong>bed elevation</strong> <span class="math inline">z_b</span>, and a <strong>basal shear stress</strong> field <span class="math inline">\tau_b</span> — and returns a glaciologically plausible ice <strong>surface</strong> <span class="math inline">z_s</span> and <strong>thickness</strong> <span class="math inline">H</span>. There is no time-stepping, no climate, and no ice dynamics.</p>
-<p>It is a clean-room simplification and modernization of <strong>ICESHEET 2.0</strong> by Evan Gowan and colleagues — <a href="https://github.com/evangowan/icesheet">source code</a>, the method’s description paper (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al., 2016, <em>Geosci. Model Dev.</em></a>), and its global application to the past 80,000 years (<a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al., 2021, <em>Nat. Commun.</em></a>). The core physics — a single published equation — is retained, while ICESHEET’s recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver (see <a href="#origin">Origin</a>).</p>
-<p>It is meant as a <em>complementary first-guess tool</em> next to a full dynamic model (e.g. <a href="https://github.com/palma-ice/yelmo">Yelmo</a>) and an independent GIA / sea-level solver: to seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.</p>
+<p><code>PlasticIceSheet.jl</code> reconstructs a perfectly plastic, steady-state ice sheet from three inputs: a grounded-ice <strong>mask</strong>, a <strong>bed elevation</strong> <span class="math inline">z_b</span> and a <strong>basal shear stress</strong> <span class="math inline">\tau_b</span>. It returns the ice <strong>surface</strong> <span class="math inline">z_s</span> and <strong>thickness</strong> <span class="math inline">H</span>, with no time stepping, no climate and no ice dynamics.</p>
+<p>It is a simplification and modernization of ICESHEET 2.0 by Evan Gowan and colleagues (<a href="https://github.com/evangowan/icesheet">source code</a>; <a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al., 2016, <em>Geosci. Model Dev.</em></a>; <a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al., 2021, <em>Nat. Commun.</em></a>). The core physics, one published equation, is retained. The recursive flowline, crossover and saddle machinery of ICESHEET (about 2,600 lines) is replaced by a grid solver of a few hundred lines (<a href="./algorithms.html#sec-dropped">Algorithms §10</a>).</p>
+<p>The package is meant as a first-guess tool next to a dynamic ice-sheet model (e.g., <a href="https://github.com/palma-ice/yelmo">Yelmo</a>) and an independent GIA and sea-level solver. Typical uses are to initialize a spin-up, to provide a surface for an SMB model, or to serve as a relaxation target.</p>
 <section id="the-idea" class="level2">
 <h2 class="anchored" data-anchor-id="the-idea">The idea</h2>
-<p>Under a perfectly-plastic, steady-state assumption, the <strong>basal shear stress</strong> <span class="math inline">\tau_b</span> balances the gravitational <strong>driving stress</strong> <span class="math inline">\tau_d</span> everywhere:</p>
+<p>Under the perfectly plastic, steady-state assumption the basal shear stress balances the gravitational driving stress, which is set by the geometry:</p>
 <p><span class="math display">
-\tau_b = \tau_d .
+\tau_b = \tau_d = \rho_i\, g\, H\, |\nabla z_s| .
 </span></p>
-<p>The driving stress is fixed by the ice geometry — for surface elevation <span class="math inline">z_s</span>, bed elevation <span class="math inline">z_b</span>, and thickness <span class="math inline">H = z_s - z_b</span>, <span class="math inline">\tau_d = \rho_i\, g\, H\, |\nabla z_s|</span> — so the prescribed <span class="math inline">\tau_b</span> relates to the surface as <span class="math inline">\tau_b = \rho_i\, g\, H\, |\nabla z_s|</span>. Rearranging for the surface slope gives the equation we solve:</p>
+<p>Rearranging for the surface slope gives the equation we solve,</p>
 <p><span class="math display">
-|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
+|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} ,
 </span></p>
-<p>This is a static <strong>Hamilton–Jacobi (eikonal) equation</strong>. Solving it with an upwind grid scheme means saddles, domes, and coalescing ice caps emerge automatically from the viscosity solution — there is no flowline tracing, crossover detection, or saddle bookkeeping. See <a href="./algorithms.html">Algorithms</a> for the full derivation and numerics.</p>
-<p>An optional <strong>DIVA closure</strong> layered on the fixed geometry recovers what perfect plasticity discards — a depth-averaged velocity and a first-order surface mass balance — and its dual can drive the geometry <em>from</em> an SMB instead of a yield stress (<a href="./algorithms.html#sec-closures">Algorithms §8–9</a>).</p>
+<p>a static Hamilton–Jacobi equation. It is discretized with a monotone upwind scheme and solved by fast sweeping in one pass over the grid, bed relief included. Saddles, domes and coalescing ice caps follow from the upwind (viscosity) solution without flowline tracing or saddle detection (<a href="./algorithms.html">Algorithms §1–6</a>).</p>
+<p>Two extensions build on the fixed geometry. A DIVA closure recovers what perfect plasticity discards, a depth-averaged velocity and a first-order surface mass balance (<a href="./algorithms.html#sec-closures">§8</a>). The same flux law then drives the geometry <em>from</em> an SMB instead of a yield stress, by solving steady mass conservation on the prescribed margin (<a href="./algorithms.html#sec-reconstruct">§9</a>).</p>
 </section>
 <section id="quick-start" class="level2">
 <h2 class="anchored" data-anchor-id="quick-start">Quick start</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">PlasticIceSheet</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>nx, ny <span class="op">=</span> <span class="fl">100</span>, <span class="fl">100</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>dx <span class="op">=</span> dy <span class="op">=</span> <span class="fl">2000.0</span>                                   <span class="co"># grid spacing (m)</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>bed  <span class="op">=</span> <span class="fu">zeros</span>(nx, ny)                               <span class="co"># bed elevation B (m)</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> [<span class="fu">hypot</span>(i<span class="op">-</span><span class="fl">50.5</span>, j<span class="op">-</span><span class="fl">50.5</span>) <span class="op">&lt;=</span> <span class="fl">40</span> for i <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>nx, j <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>ny]</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>τ_b    <span class="op">=</span> <span class="fl">1.0e5</span>                                       <span class="co"># basal shear stress (Pa)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>dx <span class="op">=</span> dy <span class="op">=</span> <span class="fl">2000.0</span>                                       <span class="co"># grid spacing (m)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>z_b  <span class="op">=</span> <span class="fu">zeros</span>(nx, ny)                                   <span class="co"># bed elevation (m)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> [<span class="fu">hypot</span>(i <span class="op">-</span> <span class="fl">50.5</span>, j <span class="op">-</span> <span class="fl">50.5</span>) <span class="op">&lt;=</span> <span class="fl">40</span> for i <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>nx, j <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span>ny]</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>τ_b  <span class="op">=</span> <span class="fl">1.0e5</span>                                           <span class="co"># basal shear stress (Pa)</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>E, H <span class="op">=</span> <span class="fu">solve</span>(bed, τ_b, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>full)     <span class="co"># :full (default) or :flat</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A full Hamilton–Jacobi solve on a 300×300 grid takes ~0.1 s. The basal shear stress <span class="math inline">\tau_b</span> is differentiable, enabling gradient-based <a href="./usage.html#inverting-for">inversion</a>.</p>
-</section>
-<section id="origin" class="level2">
-<h2 class="anchored" data-anchor-id="origin">Origin</h2>
-<p>This is a clean-room simplification and modernization of <strong><a href="https://github.com/evangowan/icesheet">ICESHEET 2.0</a></strong> (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al.&nbsp;2016, <em>GMD</em></a>; <a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al.&nbsp;2021, <em>Nat. Commun.</em></a>). The core physics — one published equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple hundred lines. <a href="./algorithms.html#sec-dropped">Algorithms §10</a> lists what was dropped.</p>
-<p><code>PlasticIceSheet.jl</code> is MIT-licensed.</p>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)                 <span class="co"># mode = :surface (default)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A solve on a 300 × 300 grid takes a few milliseconds. The result is differentiable with respect to <span class="math inline">\tau_b</span>, which enables gradient-based <a href="./inversion.html">inversion</a>. See <a href="./usage.html">Usage</a> for the options, the closures and the examples.</p>
+<p><code>PlasticIceSheet.jl</code> is MIT-licensed. A dependency-free Fortran port for coupling into Fortran models is available as <a href="https://github.com/fesmc/PlasticIceSheet">PlasticIceSheet</a>.</p>
 
 
 </section>

@@ -219,19 +219,19 @@ window.Quarto = {
   </ul></li>
   <li><a href="#velocity-and-surface-mass-balance" id="toc-velocity-and-surface-mass-balance" class="nav-link" data-scroll-target="#velocity-and-surface-mass-balance">Velocity and surface mass balance</a>
   <ul class="collapse">
-  <li><a href="#closure-b-velocity-then-implied-smb" id="toc-closure-b-velocity-then-implied-smb" class="nav-link" data-scroll-target="#closure-b-velocity-then-implied-smb">Closure B — velocity, then implied SMB</a></li>
-  <li><a href="#closure-a-balance-velocity-from-a-prescribed-smb" id="toc-closure-a-balance-velocity-from-a-prescribed-smb" class="nav-link" data-scroll-target="#closure-a-balance-velocity-from-a-prescribed-smb">Closure A — balance velocity from a prescribed SMB</a></li>
-  <li><a href="#consistency-the-implied-bed" id="toc-consistency-the-implied-bed" class="nav-link" data-scroll-target="#consistency-the-implied-bed">Consistency — the implied bed</a></li>
+  <li><a href="#closure-b-velocity-then-implied-smb" id="toc-closure-b-velocity-then-implied-smb" class="nav-link" data-scroll-target="#closure-b-velocity-then-implied-smb">Closure B: velocity, then implied SMB</a></li>
+  <li><a href="#closure-a-balance-velocity-from-a-prescribed-smb" id="toc-closure-a-balance-velocity-from-a-prescribed-smb" class="nav-link" data-scroll-target="#closure-a-balance-velocity-from-a-prescribed-smb">Closure A: balance velocity from a prescribed SMB</a></li>
   <li><a href="#smb-driven-reconstruction" id="toc-smb-driven-reconstruction" class="nav-link" data-scroll-target="#smb-driven-reconstruction">SMB-driven reconstruction</a></li>
   </ul></li>
   <li><a href="#inverting-for-tau_b" id="toc-inverting-for-tau_b" class="nav-link" data-scroll-target="#inverting-for-tau_b">Inverting for <span class="math inline">\tau_b</span></a>
   <ul class="collapse">
-  <li><a href="#forward-mode-scalar-low-dimensional-tau_b" id="toc-forward-mode-scalar-low-dimensional-tau_b" class="nav-link" data-scroll-target="#forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></a></li>
-  <li><a href="#reverse-mode-full-per-cell-tau_b-field" id="toc-reverse-mode-full-per-cell-tau_b-field" class="nav-link" data-scroll-target="#reverse-mode-full-per-cell-tau_b-field">Reverse mode — full per-cell <span class="math inline">\tau_b</span> field</a></li>
-  <li><a href="#choosing-a-parameterization" id="toc-choosing-a-parameterization" class="nav-link" data-scroll-target="#choosing-a-parameterization">Choosing a parameterization</a></li>
+  <li><a href="#forward-mode-scalar-or-low-dimensional-tau_b" id="toc-forward-mode-scalar-or-low-dimensional-tau_b" class="nav-link" data-scroll-target="#forward-mode-scalar-or-low-dimensional-tau_b">Forward mode: scalar or low-dimensional <span class="math inline">\tau_b</span></a></li>
+  <li><a href="#reverse-mode-a-full-per-cell-tau_b-field" id="toc-reverse-mode-a-full-per-cell-tau_b-field" class="nav-link" data-scroll-target="#reverse-mode-a-full-per-cell-tau_b-field">Reverse mode: a full per-cell <span class="math inline">\tau_b</span> field</a></li>
   </ul></li>
   <li><a href="#netcdf-io" id="toc-netcdf-io" class="nav-link" data-scroll-target="#netcdf-io">NetCDF I/O</a></li>
+  <li><a href="#examples" id="toc-examples" class="nav-link" data-scroll-target="#examples">Examples</a></li>
   <li><a href="#caveats" id="toc-caveats" class="nav-link" data-scroll-target="#caveats">Caveats</a></li>
+  <li><a href="#fortran-library" id="toc-fortran-library" class="nav-link" data-scroll-target="#fortran-library">Fortran library</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -261,13 +261,13 @@ window.Quarto = {
 <h2 class="anchored" data-anchor-id="installation">Installation</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">add</span>(url <span class="op">=</span> <span class="st">"https://github.com/fesmc/PlasticIceSheet.jl"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The core package depends only on <code>LinearAlgebra</code>. Reverse-mode differentiation and NetCDF I/O are loaded on demand through package extensions (below).</p>
+<p>The core package depends only on the standard libraries <code>LinearAlgebra</code> and <code>SparseArrays</code>. Reverse-mode differentiation and NetCDF I/O are loaded on demand through package extensions (below).</p>
 </section>
 <section id="solving" class="level2">
 <h2 class="anchored" data-anchor-id="solving">Solving</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">PlasticIceSheet</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ_b, mask; dx, dy, mode <span class="op">=</span> <span class="op">:</span>full)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 50%">
@@ -286,7 +286,7 @@ window.Quarto = {
 </tr>
 <tr class="even">
 <td><code>τ_b</code></td>
-<td>basal shear stress (Pa); a scalar is broadcast to a uniform field</td>
+<td>basal shear stress (Pa), scalar or field</td>
 </tr>
 <tr class="odd">
 <td><code>mask</code></td>
@@ -298,101 +298,78 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
-<p>Key options (see the docstring for the rest):</p>
+<p>Returns <code>(z_s, H)</code>, the surface elevation and thickness. Ice-free cells have <code>H = 0</code> and <code>z_s = z_b</code>. Pad the mask with at least one ice-free cell, since an ice region without an ice-free cell is unreachable (it is returned with <code>H = 0</code> and a warning).</p>
+<p>Keyword options (see the <code>solve</code> docstring for the rest):</p>
 <ul>
-<li><code>mode</code> — <code>:full</code> (default, full Hamilton–Jacobi over arbitrary relief) or <code>:flat</code> (flat-bed eikonal, cheapest; exact when relief ≪ thickness).</li>
-<li><code>params</code> — a <code>PlasticParams</code> (densities <code>ρ_i</code>/<code>ρ_w</code>, gravity <code>g</code>, sea level <code>z_ss</code>, <code>H_min</code>).</li>
-<li><code>n_outer</code>, <code>outer_tol</code>, <code>relax</code> — <code>:full</code> damped fixed-point controls. <code>relax</code> ∈ (0,1] is the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.</li>
+<li><code>mode</code>: <code>:surface</code> (default) solves the plastic surface equation directly over any bed relief, in one sweep solve. <code>:flat</code> solves the flat-bed eikonal for <span class="math inline">H^2</span> and drapes it on the bed; it is the cheapest mode and equals <code>:surface</code> on a flat bed. <code>:full</code> adds the bed gradient to the <span class="math inline">H^2</span> equation by a damped fixed point (<code>n_outer</code>, <code>outer_tol</code>, <code>relax</code>); it is kept for comparison and does not converge on rough real beds (<a href="./algorithms.html#sec-full">Algorithms §3</a>).</li>
+<li><code>z_ss</code>: sea level (m), scalar or field. Marine margins are grounded at the flotation thickness <span class="math inline">(\rho_w/\rho_i)\max(z_{ss} - z_b, 0)</span>.</li>
+<li><code>margin</code>: where the margin lies between an ice cell and its ice-free neighbour. <code>:face</code> (default) puts it on the cell face, <code>:centre</code> on the ice-free cell centre (the behaviour before v0.2), and a field <code>margin_frac</code> ∈ [0, 1) gives its distance from the ice-free cell centre as a fraction of the spacing (<a href="./algorithms.html#sec-margin">Algorithms §6</a>).</li>
+<li><code>params</code>: a <code>PlasticParams</code> with the densities <code>ρ_i</code>, <code>ρ_w</code>, gravity <code>g</code> and the thickness floor <code>H_min</code>.</li>
 </ul>
-<p>Returns <code>(z_s, H)</code> — surface elevation <span class="math inline">z_s</span> and thickness <span class="math inline">H</span>; ice-free cells have <code>H = 0</code>, <code>z_s = z_b</code>.</p>
+<p>A margin known as a signed distance (m, positive in the ice) converts to <code>margin_frac</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>frac <span class="op">=</span> <span class="fu">margin_frac_from_sdist</span>(sdist, mask, dx, dy)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(z_b, τ_b, mask; dx, dy, margin <span class="op">=</span> frac)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>On a 300 × 300 grid a <code>:surface</code> solve takes about 6 ms, <code>:flat</code> about 3 ms and a converging <code>:full</code> solve about 1 s.</p>
 <section id="diagnostics" class="level3">
 <h3 class="anchored" data-anchor-id="diagnostics">Diagnostics</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_volume</span>(H, dx, dy)                <span class="co"># m³</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_area</span>(mask, dx, dy)               <span class="co"># m²</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">surface_misfit</span>(z_s, z_s_obs, mask)   <span class="co"># mean-squared surface misfit over ice</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_volume</span>(H, dx, dy)                          <span class="co"># m³</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ice_area</span>(mask, dx, dy)                         <span class="co"># m²</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">surface_misfit</span>(z_s, z_s_obs, mask)             <span class="co"># mean-squared surface misfit over ice</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> <span class="fu">stress_residual</span>(z_s, z_b, τ_b, mask; dx, dy)   <span class="co"># |ρ_i g H |∇z_s| − τ_b| / τ_b per cell</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>stress_residual</code> checks how well a geometry satisfies the plastic stress balance, in any mode. It is a cell-centred measure and is of order 1 at the first ice cell (the one-sided slope of a square-root profile), so read it away from the margin. On a 300 m bed bump the median over the interior is about 0.04 for <code>:surface</code> and 0.5 for <code>:flat</code>.</p>
 </section>
 </section>
 <section id="velocity-and-surface-mass-balance" class="level2">
 <h2 class="anchored" data-anchor-id="velocity-and-surface-mass-balance">Velocity and surface mass balance</h2>
-<p>The plastic solve returns only geometry. A <strong>DIVA closure</strong> layered on the fixed geometry recovers a depth-averaged velocity and a first-order SMB — see <a href="./algorithms.html#sec-closures">Algorithms §8</a> for the theory. Pick a rheology and a sliding law:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>rheology <span class="op">=</span> <span class="fu">GlenRheology</span>(A <span class="op">=</span> <span class="fl">1.0e-16</span>, n <span class="op">=</span> <span class="fl">3.0</span>)           <span class="co"># isothermal Glen</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>sliding  <span class="op">=</span> <span class="fu">WeertmanSliding</span>(β <span class="op">=</span> <span class="fl">1.0e4</span>, m <span class="op">=</span> <span class="fl">3.0</span>)          <span class="co"># also LinearSliding(β),</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>                                                        <span class="co"># RegularizedCoulomb(C, u_0, m)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The plastic solve returns only geometry. A DIVA closure on the fixed geometry recovers a depth-averaged velocity and a first-order SMB (<a href="./algorithms.html#sec-closures">Algorithms §8</a>). Pick a rheology and a sliding law:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>rheology <span class="op">=</span> <span class="fu">GlenRheology</span>(A <span class="op">=</span> <span class="fl">1.0e-16</span>, n <span class="op">=</span> <span class="fl">3.0</span>)            <span class="co"># isothermal Glen, per year</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>sliding  <span class="op">=</span> <span class="fu">WeertmanSliding</span>(β <span class="op">=</span> <span class="fl">1.0e4</span>, m <span class="op">=</span> <span class="fl">3.0</span>)           <span class="co"># or LinearSliding(β),</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>                                                         <span class="co"># RegularizedCoulomb(C, u_0, m; u_max)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The coefficient (<code>β</code>, or <code>C</code> for <code>RegularizedCoulomb</code>) may be a field of the grid’s shape. <code>RegularizedCoulomb</code> returns a <code>NaN</code> sliding speed where <code>τ_b ≥ C</code>, since the bed is at its Coulomb cap and the speed is undetermined. With a finite speed cap <code>u_max</code>, the speed is <code>min(u_b, u_max)</code> instead, and <code>u_max</code> at the cap.</p>
 <section id="closure-b-velocity-then-implied-smb" class="level3">
-<h3 class="anchored" data-anchor-id="closure-b-velocity-then-implied-smb">Closure B — velocity, then implied SMB</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>vel <span class="op">=</span> <span class="fu">diva_velocity</span>(z_s, H, τ_b, mask, dx, dy; rheology, sliding)</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># named tuple: ux, uy, speed, u_b (sliding), u_def (deformation), ex, ey (flow direction)</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>smb <span class="op">=</span> <span class="fu">smb_from_velocity</span>(vel, H, z_s, mask, dx, dy)      <span class="co"># ḃ = ∇·(ūH)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>RegularizedCoulomb</code> returns a <code>NaN</code> basal speed wherever <code>τ_b ≥ C</code> (bed at the Coulomb cap, sliding speed undetermined) — those cells should take their speed from closure A.</p>
+<h3 class="anchored" data-anchor-id="closure-b-velocity-then-implied-smb">Closure B: velocity, then implied SMB</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>vel <span class="op">=</span> <span class="fu">diva_velocity</span>(z_s, H, τ_b, mask, dx, dy; rheology, sliding)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co"># named tuple: ux, uy, speed, u_b (sliding), u_def (deformation), ex, ey (flow direction)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>smb <span class="op">=</span> <span class="fu">smb_from_velocity</span>(vel, H, z_s, mask, dx, dy)      <span class="co"># ḃ = ∇·(ūH), MFD operator</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="closure-a-balance-velocity-from-a-prescribed-smb" class="level3">
-<h3 class="anchored" data-anchor-id="closure-a-balance-velocity-from-a-prescribed-smb">Closure A — balance velocity from a prescribed SMB</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>bal <span class="op">=</span> <span class="fu">balance_velocity</span>(z_s, H, mask, smb, dx, dy)       <span class="co"># named tuple: speed, ux, uy, Q, ...</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>balance_flux</code> (routing) is the exact inverse of <code>smb_from_velocity</code>, so feeding closure B’s SMB back through closure A recovers closure B’s velocity to machine precision.</p>
-</section>
-<section id="consistency-the-implied-bed" class="level3">
-<h3 class="anchored" data-anchor-id="consistency-the-implied-bed">Consistency — the implied bed</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ib <span class="op">=</span> <span class="fu">implied_basal_velocity</span>(z_s, H, τ_b, mask, smb, dx, dy; rheology)</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># u_basal = u_balance − u_def: the basal velocity the geometry + SMB demand</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Inverting a sliding law at <code>ib.u_basal</code> and the local <code>τ_b</code> gives the friction implied by the reconstruction — a check on whether the geometry and assumed climate are consistent with a plausible bed.</p>
+<h3 class="anchored" data-anchor-id="closure-a-balance-velocity-from-a-prescribed-smb">Closure A: balance velocity from a prescribed SMB</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>bal <span class="op">=</span> <span class="fu">balance_velocity</span>(z_s, H, mask, smb, dx, dy)       <span class="co"># named tuple: speed, ux, uy, Q, ...</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>ib  <span class="op">=</span> <span class="fu">implied_basal_velocity</span>(z_s, H, τ_b, mask, smb, dx, dy; rheology)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ib.u_basal = u_balance − u_def: the basal velocity that geometry and SMB demand</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>balance_flux</code> is the exact inverse of <code>smb_from_velocity</code>, so routing closure B’s SMB back through closure A recovers closure B’s flux to machine precision.</p>
 </section>
 <section id="smb-driven-reconstruction" class="level3">
 <h3 class="anchored" data-anchor-id="smb-driven-reconstruction">SMB-driven reconstruction</h3>
-<p>The dual of <code>solve</code>: drive the geometry with an SMB instead of a yield stress, on the same fixed margin (see <a href="./algorithms.html#sec-reconstruct">Algorithms §9</a>).</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">diva_reconstruct</span>(z_b, mask, smb, dx, dy; rheology, sliding)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>The outer iteration is non-contractive (like <code>:full</code>) and is under-relaxed; the default <code>relax = 0.05</code> converges the test configurations, but stiffer or finer grids need a smaller <code>relax</code> and more <code>n_outer</code>. A complete free-margin steady state is out of scope — use a dynamic model (e.g.&nbsp;<a href="https://github.com/palma-ice/yelmo">Yelmo</a>) for that.</p>
-</div>
-</div>
+<p>The dual of <code>solve</code> drives the geometry with an SMB (m ice yr⁻¹) instead of a yield stress, on the same fixed margin (<a href="./algorithms.html#sec-reconstruct">Algorithms §9</a>):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">diva_reconstruct</span>(z_b, mask, smb, dx, dy; rheology, sliding, z_ss)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The default <code>method = :steady</code> solves steady mass conservation <span class="math inline">\nabla\cdot\mathbf q = \dot b</span> with <span class="math inline">H \ge 0</span> directly. Mask cells where ablation exceeds the inflow end ice-free. It stops when the residual falls below <code>res_tol</code> (m yr⁻¹) and warns otherwise. On Greenland at 16 km (<code>examples/reconstruct_greenland.jl</code>) it takes a few seconds.</p>
+<p>The implied SMB of this method for a given geometry, with the margin outflow and the surface velocity of the same closure, is:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>o <span class="op">=</span> <span class="fu">smb_flux_divergence</span>(z_b, H, mask, dx, dy; rheology, sliding, z_ss, τ_cap <span class="op">=</span> τ_b)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># named tuple: smb, q_land, q_marine (outflow per margin cell), us_x, us_y</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The geometry <code>H</code> is a root of the steady problem forced by <code>o.smb</code>. <code>τ_cap</code> (optional) caps the driving stress of the fluxes, since a plastic bed carries at most its yield stress.</p>
+<p><code>method = :routing</code> keeps the earlier iteration (route the SMB, invert the flux law for the driving stress, plastic sweep, under-relax). It is stable only for <code>relax</code> below roughly slope × Δx / H, i.e., 0.003–0.04 in tests, and is kept for comparison.</p>
 </section>
 </section>
 <section id="inverting-for-tau_b" class="level2">
 <h2 class="anchored" data-anchor-id="inverting-for-tau_b">Inverting for <span class="math inline">\tau_b</span></h2>
-<p>The solver is differentiable with respect to <span class="math inline">\tau_b</span>. See <a href="./algorithms.html#sec-ad">Algorithms §7</a> for the theory.</p>
-<section id="forward-mode-scalar-low-dimensional-tau_b" class="level3">
-<h3 class="anchored" data-anchor-id="forward-mode-scalar-low-dimensional-tau_b">Forward mode — scalar / low-dimensional <span class="math inline">\tau_b</span></h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ForwardDiff</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> ForwardDiff.<span class="fu">derivative</span>(loss, <span class="fl">1.0e5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The solver is differentiable with respect to <span class="math inline">\tau_b</span> (<a href="./algorithms.html#sec-ad">Algorithms §7</a>).</p>
+<section id="forward-mode-scalar-or-low-dimensional-tau_b" class="level3">
+<h3 class="anchored" data-anchor-id="forward-mode-scalar-or-low-dimensional-tau_b">Forward mode: scalar or low-dimensional <span class="math inline">\tau_b</span></h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ForwardDiff</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">first</span>(<span class="fu">solve</span>(z_b, τ_b, mask; dx, dy)), z_s_obs, mask)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> ForwardDiff.<span class="fu">derivative</span>(loss, <span class="fl">1.0e5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="reverse-mode-full-per-cell-tau_b-field" class="level3">
-<h3 class="anchored" data-anchor-id="reverse-mode-full-per-cell-tau_b-field">Reverse mode — full per-cell <span class="math inline">\tau_b</span> field</h3>
+<section id="reverse-mode-a-full-per-cell-tau_b-field" class="level3">
+<h3 class="anchored" data-anchor-id="reverse-mode-a-full-per-cell-tau_b-field">Reverse mode: a full per-cell <span class="math inline">\tau_b</span> field</h3>
 <p>Load the extension triggers, then differentiate <code>differentiable_thickness</code> with any reverse-mode AD:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ImplicitDifferentiation</span>, <span class="bu">ADTypes</span>, <span class="bu">ForwardDiff</span>, <span class="bu">Zygote</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ_b, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ_b)[<span class="fl">1</span>]      <span class="co"># gradient w.r.t. the whole τ_b field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A complete, runnable Adam-based recovery of a spatially-varying <span class="math inline">\tau_b</span> from an observed surface is in <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a>. It drives the misfit down by four orders of magnitude and recovers the two-region truth to within a fraction of a kPa.</p>
-</section>
-<section id="choosing-a-parameterization" class="level3">
-<h3 class="anchored" data-anchor-id="choosing-a-parameterization">Choosing a parameterization</h3>
-<p>How you parameterize <span class="math inline">\tau_b</span> — a regularized per-cell field, or a few bed-derived tiles — matters as much as the gradient. The real-data Greenland example <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl"><code>examples/invert_taub_greenland.jl</code></a> implements both and switches with one env var:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl                  <span class="co"># tiled (default)</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="va">METHOD</span><span class="op">=</span>percell <span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl   <span class="co"># point-by-point</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>See <a href="./inversion.html">Inversion</a> for the parameterizations, the link to ICESHEET’s hand-tuned shear-stress domains, and a resolution test for the number of tiles.</p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>The default reverse-mode linear solver is direct (robust for modest grids). For very large fields, pass an iterative solver — see the <code>differentiable_thickness</code> docstring.</p>
-</div>
-</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">ImplicitDifferentiation</span>, <span class="bu">ADTypes</span>, <span class="bu">ForwardDiff</span>, <span class="bu">Zygote</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">loss</span>(τ_b) <span class="op">=</span> <span class="fu">surface_misfit</span>(<span class="fu">differentiable_thickness</span>(τ_b, z_b, mask; dx, dy) <span class="op">.+</span> z_b, z_s_obs, mask)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>g <span class="op">=</span> Zygote.<span class="fu">gradient</span>(loss, τ_b)[<span class="fl">1</span>]      <span class="co"># gradient with respect to the whole τ_b field</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>differentiable_thickness</code> takes the same <code>mode</code>, <code>z_ss</code> and <code>margin</code> keywords as <code>solve</code>. The default reverse-mode linear solver is direct, which is robust for modest grids. For very large fields, pass an iterative solver (see the <code>differentiable_thickness</code> docstring).</p>
+<p><a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl"><code>examples/invert_tau.jl</code></a> recovers a spatially varying <span class="math inline">\tau_b</span> from an observed surface with Adam, and <a href="./inversion.html">Inversion</a> covers the parameterizations of <span class="math inline">\tau_b</span> on real data.</p>
 </section>
 </section>
 <section id="netcdf-io" class="level2">
@@ -403,13 +380,55 @@ Tip
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>z_s, H <span class="op">=</span> <span class="fu">solve</span>(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)</span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="fu">save_reconstruction</span>(<span class="st">"out.nc"</span>, z_s, H; x <span class="op">=</span> inp.x, y <span class="op">=</span> inp.y)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
+<section id="examples" class="level2">
+<h2 class="anchored" data-anchor-id="examples">Examples</h2>
+<p>The scripts in <a href="https://github.com/fesmc/PlasticIceSheet.jl/tree/main/examples"><code>examples/</code></a> run with <code>julia --project=examples examples/&lt;script&gt;.jl</code>. The Greenland scripts read the GRL-16KM or GRL-32KM grids from an <code>examples/ice_data</code> directory (not included).</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>script</th>
+<th>content</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>invert_tau.jl</code></td>
+<td>synthetic per-cell <span class="math inline">\tau_b</span> recovery with Adam (reverse mode)</td>
+</tr>
+<tr class="even">
+<td><code>invert_taub_greenland.jl</code></td>
+<td><span class="math inline">\tau_b</span> inversion on Greenland, tiled or per-cell (<code>METHOD</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>invert_taub_sweep_greenland.jl</code></td>
+<td>rmse against the number of tiles</td>
+</tr>
+<tr class="even">
+<td><code>smb_from_velocity_greenland.jl</code></td>
+<td>implied SMB from observed velocity and thickness, against the climate SMB</td>
+</tr>
+<tr class="odd">
+<td><code>reconstruct_greenland.jl</code></td>
+<td>SMB-driven reconstruction from the MAR SMB, with balance velocity</td>
+</tr>
+</tbody>
+</table>
+</section>
 <section id="caveats" class="level2">
 <h2 class="anchored" data-anchor-id="caveats">Caveats</h2>
 <ul>
-<li>Steady-state geometry only — biased thick/peaked where the real ice was streaming or dynamic (low effective driving stress the plastic assumption cannot see).</li>
-<li><span class="math inline">\tau_b</span> carries essentially all the uncertainty. For a first guess a constant (~50–100 kPa) or a bed-keyed value is fine; do not over-interpret the result as a constrained reconstruction.</li>
-<li>Very steep beds (relief approaching the ice thickness over a few cells) may not converge in <code>:full</code> — see <a href="./algorithms.html#sec-full">Algorithms §3</a>.</li>
+<li>The geometry is steady state only. It is biased thick where the real ice was streaming or otherwise dynamic, since the plastic assumption sees no reduced driving stress there.</li>
+<li><span class="math inline">\tau_b</span> carries essentially all of the uncertainty. For a first guess a constant (about 50–100 kPa) or a bed-keyed value is reasonable, but the result is not a constrained reconstruction.</li>
+<li><code>:surface</code> and <code>:flat</code> are first-order accurate. At 10–30 km the margin position and the coarse inputs change the ice volume by several percent (<a href="./algorithms.html#sec-margin">Algorithms §6</a>).</li>
 </ul>
+</section>
+<section id="fortran-library" class="level2">
+<h2 class="anchored" data-anchor-id="fortran-library">Fortran library</h2>
+<p><a href="https://github.com/fesmc/PlasticIceSheet">PlasticIceSheet</a> is a dependency-free Fortran port of the forward solver and the closures (<code>libplastic.a</code>), for coupling into Fortran models. It uses the same schemes (results were verified bit-identical against v0.1) and adds a warm start, OpenMP parallelism and a joint inversion of speed and SMB. The <span class="math inline">\tau_b</span> inversion and the AD extension remain Julia-only.</p>
 
 
 </section>

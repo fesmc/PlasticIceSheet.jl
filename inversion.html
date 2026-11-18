@@ -215,12 +215,12 @@ window.Quarto = {
   <li><a href="#the-inverse-problem" id="toc-the-inverse-problem" class="nav-link active" data-scroll-target="#the-inverse-problem">The inverse problem</a></li>
   <li><a href="#two-parameterizations" id="toc-two-parameterizations" class="nav-link" data-scroll-target="#two-parameterizations">Two parameterizations</a>
   <ul class="collapse">
-  <li><a href="#point-by-point-methodpercell" id="toc-point-by-point-methodpercell" class="nav-link" data-scroll-target="#point-by-point-methodpercell">Point-by-point (<code>METHOD=percell</code>)</a></li>
+  <li><a href="#per-cell-methodpercell" id="toc-per-cell-methodpercell" class="nav-link" data-scroll-target="#per-cell-methodpercell">Per cell (<code>METHOD=percell</code>)</a></li>
   <li><a href="#tiled-methodtiled-default" id="toc-tiled-methodtiled-default" class="nav-link" data-scroll-target="#tiled-methodtiled-default">Tiled (<code>METHOD=tiled</code>, default)</a></li>
   </ul></li>
-  <li><a href="#relation-to-icesheet-gowan-et-al." id="toc-relation-to-icesheet-gowan-et-al." class="nav-link" data-scroll-target="#relation-to-icesheet-gowan-et-al.">Relation to ICESHEET / Gowan et al.</a></li>
+  <li><a href="#relation-to-icesheet" id="toc-relation-to-icesheet" class="nav-link" data-scroll-target="#relation-to-icesheet">Relation to ICESHEET</a></li>
   <li><a href="#how-many-tiles-a-resolution-test" id="toc-how-many-tiles-a-resolution-test" class="nav-link" data-scroll-target="#how-many-tiles-a-resolution-test">How many tiles? A resolution test</a></li>
-  <li><a href="#conditioning-note-flat-vs-full" id="toc-conditioning-note-flat-vs-full" class="nav-link" data-scroll-target="#conditioning-note-flat-vs-full">Conditioning note: <code>:flat</code> vs <code>:full</code></a></li>
+  <li><a href="#conditioning-choice-of-mode" id="toc-conditioning-choice-of-mode" class="nav-link" data-scroll-target="#conditioning-choice-of-mode">Conditioning: choice of mode</a></li>
   <li><a href="#toward-a-paleo-rsl-reconstruction" id="toc-toward-a-paleo-rsl-reconstruction" class="nav-link" data-scroll-target="#toward-a-paleo-rsl-reconstruction">Toward a paleo (RSL) reconstruction</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
@@ -247,67 +247,119 @@ window.Quarto = {
 </header>
 
 
-<p>The plastic solve turns a margin, a bed, and a basal-shear-stress field <span class="math inline">\tau_b</span> into an ice sheet. <span class="math inline">\tau_b</span> carries essentially all of the reconstruction’s freedom, so the practical question is the <strong>inverse</strong> one: what <span class="math inline">\tau_b</span> makes the reconstruction match data? This page covers how that inverse problem is posed, the two parameterizations of <span class="math inline">\tau_b</span> the examples provide (and how to switch between them), and how this relates to — and automates — the hand-tuned shear-stress domains of ICESHEET (Gowan et al.&nbsp;2016, 2021).</p>
-<p>The gradient machinery itself (implicit differentiation of the converged eikonal) lives in <a href="./algorithms.html#sec-ad">Algorithms §7</a>; here we use it.</p>
+<p>The plastic solve turns a margin, a bed and a basal shear stress <span class="math inline">\tau_b</span> into an ice sheet. <span class="math inline">\tau_b</span> carries essentially all of the freedom of the reconstruction, so the practical question is the inverse one: which <span class="math inline">\tau_b</span> makes the reconstruction match the data? This page describes how the inverse problem is posed, the two parameterizations of <span class="math inline">\tau_b</span> in the examples, and how the tiled parameterization automates the hand-tuned shear-stress domains of ICESHEET (Gowan et al., 2016, 2021). The gradient itself (implicit differentiation of the converged solve) is described in <a href="./algorithms.html#sec-ad">Algorithms §7</a>.</p>
 <section id="the-inverse-problem" class="level2">
 <h2 class="anchored" data-anchor-id="the-inverse-problem">The inverse problem</h2>
-<p>Pick an objective on the reconstruction and minimise it over <span class="math inline">\tau_b</span>. For present-day ice the natural target is the observed surface, through <code>surface_misfit</code>:</p>
+<p>We minimize an objective on the reconstruction over <span class="math inline">\tau_b</span>. For present-day ice the natural target is the observed surface, through <code>surface_misfit</code>:</p>
 <p><span class="math display">
 \min_{\tau_b}\; \big\langle\, (z_s(\tau_b) - z_s^{\text{obs}})^2 \,\big\rangle_{\text{mask}},
 \qquad z_s(\tau_b) = z_b + H(\tau_b).
 </span></p>
-<p><code>differentiable_thickness</code> gives <span class="math inline">\partial H/\partial\tau_b</span> by reverse-mode AD, so any gradient optimiser (the examples use Adam) drives the misfit down. The grounded <code>mask</code> is the prescribed margin — an ICESHEET input, <strong>not</strong> something inverted — so the recovered ice <em>extent</em> always equals the mask; only the <em>geometry</em> inside it is fit.</p>
-<p>The number of free parameters in <span class="math inline">\tau_b</span> should match what the target data can resolve. A dense present-day surface constrains a dense field; a sparse paleo target (relative sea level) constrains only a handful of regional values. The two parameterizations below sit at those two ends.</p>
+<p><code>differentiable_thickness</code> gives the gradient by reverse-mode AD, and the examples minimize the misfit with Adam. The grounded <code>mask</code> is the prescribed margin, an input of ICESHEET that is not inverted. The recovered ice extent therefore always equals the mask, and only the geometry inside it is fit.</p>
+<p>The number of free parameters in <span class="math inline">\tau_b</span> should match what the target data can resolve. A dense present-day surface constrains a dense field, while a sparse paleo target (relative sea level) constrains only a few regional values. The two parameterizations below sit at these two ends.</p>
 </section>
 <section id="two-parameterizations" class="level2">
 <h2 class="anchored" data-anchor-id="two-parameterizations">Two parameterizations</h2>
-<p>The example <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl"><code>examples/invert_taub_greenland.jl</code></a> implements both and switches between them with a single environment variable, <code>METHOD</code>:</p>
+<p>The example <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl"><code>examples/invert_taub_greenland.jl</code></a> implements both and switches between them with the environment variable <code>METHOD</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl                  <span class="co"># METHOD=tiled (default)</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="va">METHOD</span><span class="op">=</span>percell <span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl   <span class="co"># point-by-point</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Everything downstream — the objective, the Adam loop, the outputs — is shared; only the map from optimisation parameters to the <span class="math inline">\tau_b</span> field differs.</p>
-<section id="point-by-point-methodpercell" class="level3">
-<h3 class="anchored" data-anchor-id="point-by-point-methodpercell">Point-by-point (<code>METHOD=percell</code>)</h3>
-<p>A full per-cell <span class="math inline">\tau_b</span> field, regularized to a length scale <code>REG_KM</code> by a <strong>Gaussian-blur reparameterization</strong>: optimise a raw field <span class="math inline">\varphi</span> and set</p>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="va">METHOD</span><span class="op">=</span>percell <span class="ex">julia</span> <span class="at">--project</span><span class="op">=</span>examples examples/invert_taub_greenland.jl   <span class="co"># per cell</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The objective, the Adam loop and the outputs are shared. Only the map from the optimization parameters to the <span class="math inline">\tau_b</span> field differs. All results below are for Greenland at 32 km (GRL-32KM, about 2000 ice cells), <code>mode = :surface</code> and <code>margin = :face</code>.</p>
+<section id="per-cell-methodpercell" class="level3">
+<h3 class="anchored" data-anchor-id="per-cell-methodpercell">Per cell (<code>METHOD=percell</code>)</h3>
+<p>A full per-cell <span class="math inline">\tau_b</span> field is regularized to a length scale <code>REG_KM</code> by a Gaussian-blur reparameterization. We optimize a raw field <span class="math inline">\varphi</span> and set</p>
 <p><span class="math display">
 \tau_b = \operatorname{clamp}\big(K_x\,\varphi\,K_y\big),
 </span></p>
-<p>with <span class="math inline">K_x, K_y</span> separable 1-D Gaussian smoothers (<span class="math inline">\sigma = \texttt{REG\_KM}/\Delta x</span> cells). Being linear, the blur differentiates cleanly under Zygote, and it <em>guarantees</em> <span class="math inline">\tau_b</span> varies only on scales <span class="math inline">\gtrsim</span> <code>REG_KM</code> regardless of the data fit. Many effective degrees of freedom; fits a dense observed surface closely (on Greenland GRL-32KM, ~85 m rmse).</p>
+<p>where <span class="math inline">K_x</span> and <span class="math inline">K_y</span> are separable 1-D Gaussian smoothers with <span class="math inline">\sigma = \texttt{REG\_KM}/\Delta x</span> cells. The blur is linear, so it differentiates cleanly under Zygote, and it ensures that <span class="math inline">\tau_b</span> varies only on scales of at least <code>REG_KM</code> regardless of the data fit. This parameterization has many effective degrees of freedom and fits a dense observed surface closely (about 44 m rmse with <code>REG_KM</code> = 32 km).</p>
 </section>
 <section id="tiled-methodtiled-default" class="level3">
 <h3 class="anchored" data-anchor-id="tiled-methodtiled-default">Tiled (<code>METHOD=tiled</code>, default)</h3>
-<p>A low-dimensional, <strong>paleo-transferable</strong> parameterization — the automatic version of ICESHEET’s hand-tuned shear-stress domains. Cells are grouped into tiles defined <strong>only from data available for an unknown ice sheet</strong>: bedrock roughness (windowed standard deviation of <span class="math inline">z_b</span>, binned into <code>N_ROUGH</code> quantile classes) crossed with a sediment mask (<code>z_sed</code>, split soft/hard at <code>SED_THRESH</code>). The ice thickness and ice-derived drainage basins are never used to draw the tiles. Each tile <span class="math inline">d</span> carries one scalar <span class="math inline">\theta_d</span>:</p>
+<p>The tiled parameterization is low-dimensional and transferable to paleo ice sheets. Cells are grouped into tiles defined <strong>only from data available for an unknown ice sheet</strong>: bed roughness (the windowed standard deviation of <span class="math inline">z_b</span>, binned into <code>N_ROUGH</code> quantile classes) crossed with a sediment mask (sediment thickness split into soft and hard at <code>SED_THRESH</code>). The ice thickness and ice-derived drainage basins are never used to draw the tiles. Each tile <span class="math inline">d</span> carries one value <span class="math inline">\theta_d</span>:</p>
 <p><span class="math display">
 \tau_b(\mathbf x) = \operatorname{clamp}\Big(\textstyle\sum_d \theta_d\, \mathbb 1[\,\mathbf x \in d\,]\Big),
 </span></p>
-<p>embedded via a one-hot selector matrix (linear, hence Zygote-friendly). The default is <code>N_ROUGH = 4</code> × 2 sediment classes = <strong>8 tiles</strong>. The observed surface enters <em>only</em> as the calibration target — exactly the modern-surface calibration Gowan used for Greenland and Antarctica, and the slot a relative-sea-level objective would occupy for a paleo reconstruction.</p>
+<p>embedded by a one-hot selector matrix, which is linear and thus differentiable under Zygote. The default is <code>N_ROUGH = 4</code> × 2 sediment classes, i.e., 8 tiles, which reach about 220 m rmse. The observed surface enters only as the calibration target. This is the modern-surface calibration Gowan et al.&nbsp;(2021) used for Greenland and Antarctica, and the place a relative-sea-level objective would take in a paleo reconstruction.</p>
 </section>
 </section>
-<section id="relation-to-icesheet-gowan-et-al." class="level2">
-<h2 class="anchored" data-anchor-id="relation-to-icesheet-gowan-et-al.">Relation to ICESHEET / Gowan et al.</h2>
-<p>ICESHEET (Gowan et al.&nbsp;2016) is the same perfectly-plastic, equilibrium forward model. In PaleoMIST (Gowan et al.&nbsp;2021) <span class="math inline">\tau_b</span> was chosen by:</p>
-<ul>
-<li><strong>Target.</strong> Relative sea level through a GIA model for the paleo ice sheets (adjust <span class="math inline">\tau_b</span> to maximise LGM volume, reduce it through deglaciation to fit postglacial sea-level indicators), plus geological margins; and the <strong>modern surface</strong> for Greenland and Antarctica.</li>
-<li><strong>Domains.</strong> Defined by topographic variability (mountainous vs flat) refined by surficial geology (continuous sediment → low <span class="math inline">\tau_b</span>; hard/discontinuous → high), with boundaries on fjords, mountain ranges, and the flat interior.</li>
-<li><strong>Tuning.</strong> Manual and iterative — repeated by hand until the fit was acceptable.</li>
-</ul>
-<p>The <code>tiled</code> method reproduces this logic but <strong>automates both halves</strong>: the domains come from bed roughness + sediment programmatically, and the per-domain values come from gradient descent rather than hand-tuning. On Greenland it recovers exactly Gowan’s premise — soft- sediment tiles collapse to 5–32 kPa, hard-bed tiles sit at 60–130 kPa.</p>
+<section id="relation-to-icesheet" class="level2">
+<h2 class="anchored" data-anchor-id="relation-to-icesheet">Relation to ICESHEET</h2>
+<p>ICESHEET (Gowan et al., 2016) is the same perfectly plastic, equilibrium forward model. In PaleoMIST (Gowan et al., 2021), <span class="math inline">\tau_b</span> was chosen by three steps. First, the target was relative sea level through a GIA model for the paleo ice sheets, plus geological margins, and the modern surface for Greenland and Antarctica. Second, the shear-stress domains were defined by topographic variability (mountainous or flat) and refined by surficial geology (continuous sediment for low <span class="math inline">\tau_b</span>, hard or discontinuous cover for high <span class="math inline">\tau_b</span>). Third, the domain values were tuned by hand until the fit was acceptable.</p>
+<p>The tiled method follows this logic but automates both halves: the domains come from bed roughness and sediment, and the domain values come from gradient descent. On Greenland it recovers the premise of Gowan et al.: the soft-sediment tiles settle at about 5–46 kPa and the hard-bed tiles at about 51–99 kPa.</p>
 </section>
 <section id="how-many-tiles-a-resolution-test" class="level2">
 <h2 class="anchored" data-anchor-id="how-many-tiles-a-resolution-test">How many tiles? A resolution test</h2>
-<p>The one judgement ICESHEET left to intuition — how many domains — can be made quantitative. <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_sweep_greenland.jl"><code>examples/invert_taub_sweep_greenland.jl</code></a> sweeps the tile count and plots surface-misfit rmse against the number of free parameters; the <strong>knee</strong> of that curve is the data-supported resolution. On Greenland GRL-32KM:</p>
-<ul>
-<li><strong>Sediment geology dominates, not roughness count.</strong> A single hard/soft split (2 tiles) drops rmse from 514 → 356 m — more than eight roughness-only tiles achieve (446 m).</li>
-<li><strong>The knee is early — ~6–8 tiles.</strong> Beyond it the curve flattens (6 tiles → 333 m, 15 tiles → 327 m): extra parameters do not earn their keep.</li>
-<li><strong>An irreducible floor.</strong> Even the best tiling (~327 m) sits well above the per-cell fit (~85 m), so a substantial part of the surface signal reflects <span class="math inline">\tau_b</span> variability that static bed roughness and sediment cannot explain (basal thermal/hydrological state).</li>
-</ul>
+<p>The number of domains, which ICESHEET left to judgement, can be chosen quantitatively. <a href="https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_sweep_greenland.jl"><code>examples/invert_taub_sweep_greenland.jl</code></a> sweeps the tile count (100 Adam iterations each) and plots the rmse against the number of free parameters. The knee of that curve is the resolution the data support:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>roughness classes</th>
+<th>tiles, roughness only</th>
+<th>rmse (m)</th>
+<th>tiles, with sediment split</th>
+<th>rmse (m)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>1</td>
+<td>319</td>
+<td>2</td>
+<td>250</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>2</td>
+<td>283</td>
+<td>4</td>
+<td>237</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>3</td>
+<td>269</td>
+<td>6</td>
+<td>213</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>4</td>
+<td>273</td>
+<td>8</td>
+<td>220</td>
+</tr>
+<tr class="odd">
+<td>6</td>
+<td>6</td>
+<td>268</td>
+<td>11</td>
+<td>212</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>8</td>
+<td>264</td>
+<td>15</td>
+<td>210</td>
+</tr>
+</tbody>
+</table>
+<p>Sediment controls the fit more than roughness does. A single hard/soft split (2 tiles) reduces the rmse from about 320 to 250 m, more than eight roughness-only tiles achieve (about 264 m). The knee lies at about 6 tiles, beyond which further parameters change the rmse by less than 5 m. Even the best tiling (about 210 m) remains well above the per-cell fit (about 44 m). Thus, a substantial part of the surface signal reflects variations of <span class="math inline">\tau_b</span> that static bed roughness and sediment do not explain, most likely the basal thermal and hydrological state.</p>
 </section>
-<section id="conditioning-note-flat-vs-full" class="level2">
-<h2 class="anchored" data-anchor-id="conditioning-note-flat-vs-full">Conditioning note: <code>:flat</code> vs <code>:full</code></h2>
-<p>The inversions use <code>mode = :flat</code>. The <code>:full</code> adjoint forms a dense Jacobian over the whole grid, whose direct linear solve becomes singular/ill-posed on large grids; <code>:flat</code> gives a well-conditioned eikonal adjoint and ties <span class="math inline">\tau_b</span> directly to surface slope, which is the more natural object when fitting a surface. For finer grids the per-cell gradient cost is dominated by that dense solve — see the <code>differentiable_thickness</code> docstring for the iterative-solver option.</p>
+<section id="conditioning-choice-of-mode" class="level2">
+<h2 class="anchored" data-anchor-id="conditioning-choice-of-mode">Conditioning: choice of mode</h2>
+<p>The inversions use <code>mode = :surface</code>, the default. Its scheme is monotone (<a href="./algorithms.html#sec-surface">Algorithms §2</a>), so the residual Jacobian of the adjoint is well conditioned, as for <code>:flat</code>. Including the bed relief, however, improves the fit: with the default 8 tiles <code>:surface</code> reaches about 220 m rmse and <code>:flat</code> about 312 m, at a similar cost (about 4–5 min for 250 iterations). <code>:full</code> is not suitable, since its damped fixed point does not converge on real beds, and its dense adjoint system becomes singular on large grids. For finer grids the cost of the per-cell gradient is dominated by the direct linear solve. See the <code>differentiable_thickness</code> docstring for the iterative-solver option.</p>
 </section>
 <section id="toward-a-paleo-rsl-reconstruction" class="level2">
 <h2 class="anchored" data-anchor-id="toward-a-paleo-rsl-reconstruction">Toward a paleo (RSL) reconstruction</h2>
-<p>The <code>tiled</code> parameterization is the bridge to a genuine paleo reconstruction: keep the bed-derived tiles, and replace the observed-surface objective with relative sea level routed through a GIA model. Because the tiles need no ice-sheet knowledge to define, the same setup transfers to an ice sheet whose geometry is unknown — which is exactly the regime ICESHEET was built for, and where reducing the parameter count is not optional but required.</p>
+<p>The tiled parameterization links to a paleo reconstruction: keep the bed-derived tiles and replace the observed-surface objective by relative sea level computed with a GIA model. The tiles need no knowledge of the ice sheet, so the same setup transfers to an ice sheet whose geometry is unknown. That is the regime ICESHEET was built for, and the one in which reducing the number of parameters is required rather than optional.</p>
 
 
 </section>
