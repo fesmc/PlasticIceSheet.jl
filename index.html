@@ -81,7 +81,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-48366446b25c0eb9a9eed8d4d8517111.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-9a6bfe3352ba6dc8ce3318bde1ee1a3f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -188,10 +188,6 @@ window.Quarto = {
     <a class="nav-link" href="./usage.html"> 
 <span class="menu-text">Usage</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./PLAN.html"> 
-<span class="menu-text">Design notes</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item compact">
@@ -276,7 +272,7 @@ window.Quarto = {
 </section>
 <section id="origin" class="level2">
 <h2 class="anchored" data-anchor-id="origin">Origin</h2>
-<p>This is a clean-room simplification and modernization of <strong><a href="https://github.com/evangowan/icesheet">ICESHEET 2.0</a></strong> (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al.&nbsp;2016, <em>GMD</em></a>; <a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al.&nbsp;2021, <em>Nat. Commun.</em></a>). The core physics — one published equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple hundred lines. The <a href="./PLAN.html">Design notes</a> record what was kept, simplified, and dropped, and why.</p>
+<p>This is a clean-room simplification and modernization of <strong><a href="https://github.com/evangowan/icesheet">ICESHEET 2.0</a></strong> (<a href="https://doi.org/10.5194/gmd-9-1673-2016">Gowan et al.&nbsp;2016, <em>GMD</em></a>; <a href="https://doi.org/10.1038/s41467-021-21469-w">Gowan et al.&nbsp;2021, <em>Nat. Commun.</em></a>). The core physics — one published equation — is retained; the ~2,600-line recursive flowline / crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple hundred lines. <a href="./algorithms.html#sec-dropped">Algorithms §10</a> lists what was dropped.</p>
 <p><code>PlasticIceSheet.jl</code> is MIT-licensed.</p>
 
 

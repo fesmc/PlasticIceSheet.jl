@@ -46,7 +46,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-63b5708e65d6cd79cd7618c58d0c21e7.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-48366446b25c0eb9a9eed8d4d8517111.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-9a6bfe3352ba6dc8ce3318bde1ee1a3f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -153,10 +153,6 @@ window.Quarto = {
     <a class="nav-link" href="./usage.html"> 
 <span class="menu-text">Usage</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./PLAN.html"> 
-<span class="menu-text">Design notes</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item compact">
@@ -208,7 +204,7 @@ window.Quarto = {
   <li><a href="#consistency-where-a-and-b-meet" id="toc-consistency-where-a-and-b-meet" class="nav-link" data-scroll-target="#consistency-where-a-and-b-meet">Consistency: where A and B meet</a></li>
   </ul></li>
   <li><a href="#sec-reconstruct" id="toc-sec-reconstruct" class="nav-link" data-scroll-target="#sec-reconstruct">9. SMB-driven reconstruction</a></li>
-  <li><a href="#what-was-deliberately-dropped" id="toc-what-was-deliberately-dropped" class="nav-link" data-scroll-target="#what-was-deliberately-dropped">10. What was deliberately dropped</a></li>
+  <li><a href="#sec-dropped" id="toc-sec-dropped" class="nav-link" data-scroll-target="#sec-dropped">10. What was deliberately dropped</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/fesmc/PlasticIceSheet.jl/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -526,9 +522,9 @@ u_{\text{basal}} = u_{\text{balance}} - u_d,
 <p>Like the <code>:full</code> outer iteration (§3), the “route, re-invert, re-sweep” map is <strong>not contractive</strong> and must be under-relaxed (<a href="#eq-hj" class="quarto-xref">Equation&nbsp;6</a>’s damping, here with default <span class="math inline">\alpha=\texttt{relax}=0.05</span>). Stiffer or finer grids trade a smaller <span class="math inline">\alpha</span> for more iterations.</p>
 <p>This is the lighter middle path between the plastic reconstruction (margin and yield stress in, geometry out; SMB-agnostic) and a full thermomechanical model: it stays a plastic-style geometry solver but is driven by climate. A complete free-margin, nonlinear-diffusion steady state is deliberately <em>not</em> attempted here — that is the job of a dynamic model such as <a href="https://github.com/palma-ice/yelmo">Yelmo</a>.</p>
 </section>
-<section id="what-was-deliberately-dropped" class="level2">
-<h2 class="anchored" data-anchor-id="what-was-deliberately-dropped">10. What was deliberately dropped</h2>
-<p>Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline. See the <a href="./PLAN.html">Design notes</a> for the full accounting.</p>
+<section id="sec-dropped" class="level2">
+<h2 class="anchored" data-anchor-id="sec-dropped">10. What was deliberately dropped</h2>
+<p>Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery unnecessary: method-of-characteristics flowline tracing, crossover detection (the motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level iteration loop, and the GMT projection/preprocessing pipeline.</p>
 
 
 </section>
