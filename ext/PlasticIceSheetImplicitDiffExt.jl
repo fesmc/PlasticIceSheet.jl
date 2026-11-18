@@ -10,13 +10,13 @@ module PlasticIceSheetImplicitDiffExt
 # (e.g. Zygote) gets the gradient through ImplicitDifferentiation's ChainRules rule.
 
 using PlasticIceSheet
-using PlasticIceSheet: _solve_w, _bc_w, _as_field, godunov_residual, PlasticParams
+using PlasticIceSheet: _solve_w, _bc_w, _as_field, _margin_dfac, godunov_residual, PlasticParams
 using ImplicitDifferentiation: ImplicitFunction, MatrixRepresentation, DirectLinearSolver
 using ADTypes: AutoForwardDiff
 import ForwardDiff  # provides the backend used to differentiate the conditions
 
 """
-    differentiable_thickness(τ_b, z_b, mask; dx, dy, z_ss=0.0, mode=:full, params=PlasticParams(),
+    differentiable_thickness(τ_b, z_b, mask; dx, dy, z_ss=0.0, margin=:face, mode=:full, params=PlasticParams(),
                              max_sweeps, tol, n_outer, outer_tol,
                              representation=MatrixRepresentation(),
                              linear_solver=DirectLinearSolver())
@@ -34,7 +34,7 @@ the eikonal adjoint's characteristics span the domain).
 """
 function PlasticIceSheet.differentiable_thickness(
         τ_b::AbstractMatrix, z_b::AbstractMatrix, mask::AbstractMatrix{Bool};
-        dx::Real, dy::Real, z_ss = 0.0, mode::Symbol = :full,
+        dx::Real, dy::Real, z_ss = 0.0, margin = :face, mode::Symbol = :full,
         params::PlasticParams = PlasticParams(),
         max_sweeps::Int = 200, tol = 1e-6, n_outer::Int = 200, outer_tol = 1e-5,
         relax = 0.5,
@@ -45,11 +45,12 @@ function PlasticIceSheet.differentiable_thickness(
         throw(DimensionMismatch("τ_b, z_b and mask must share the same shape"))
 
     bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), params)
+    dfac = _margin_dfac(mask, margin)
     shape = size(z_b)
     # Constant (non-differentiated) context carried alongside the differentiated `τ_b`.
     # `:full` needs a tightly-converged forward solve (small residual) for the implicit
     # gradient to be exact, hence the firmer n_outer / outer_tol defaults here.
-    ctx = (; z_b, mask, bc, dx, dy, params, mode, shape,
+    ctx = (; z_b, mask, bc, dfac, dx, dy, params, mode, shape,
            max_sweeps, tol, n_outer, outer_tol, relax)
 
     # The implicit output `y` and the residual are kept as flat vectors so the Jacobian
@@ -57,7 +58,7 @@ function PlasticIceSheet.differentiable_thickness(
 
     # solver(x, args...) -> (y, z): forward solve for w = H² (byproduct z unused).
     solver = function (x, c)
-        w = _solve_w(x, c.z_b, c.mask, c.bc, c.dx, c.dy, c.params, c.mode;
+        w = _solve_w(x, c.z_b, c.mask, c.bc, c.dfac, c.dx, c.dy, c.params, c.mode;
                      max_sweeps = c.max_sweeps, tol = c.tol,
                      n_outer = c.n_outer, outer_tol = c.outer_tol, relax = c.relax)
         return vec(w), nothing
@@ -65,7 +66,7 @@ function PlasticIceSheet.differentiable_thickness(
 
     # conditions(x, y, z, args...) -> c: the residual that vanishes at the solution.
     conditions = function (x, y, _z, c)
-        r = godunov_residual(reshape(y, c.shape), x, c.z_b, c.mask, c.bc,
+        r = godunov_residual(reshape(y, c.shape), x, c.z_b, c.mask, c.bc, c.dfac,
                              c.dx, c.dy, c.params, c.mode)
         return vec(r)
     end

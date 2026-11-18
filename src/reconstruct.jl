@@ -39,7 +39,7 @@ function _invert_driving_stress(q, H, sliding::SlidingLaw, rheology::GlenRheolog
 end
 
 """
-    diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding, z_ss = 0.0, params = PlasticParams(),
+    diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding, z_ss = 0.0, margin = :face, params = PlasticParams(),
                      H_init = nothing, n_outer = 300, relax = 0.3, tol = 0.5,
                      τ_hi = 5.0e5, max_sweeps = 400, sweep_tol = 1e-9)
 
@@ -49,7 +49,7 @@ iterates: route `smb` down the surface for the required flux, invert the DIVA fl
 (`rheology` + `sliding`) for the driving stress that carries it, and sweep the plastic
 eikonal — see the file header. `smb` may be a scalar or a field.
 
-Inputs mirror [`solve`](@ref) (`z_b`, `mask`, `dx`, `dy`, `z_ss`, `params`). Reconstruction
+Inputs mirror [`solve`](@ref) (`z_b`, `mask`, `dx`, `dy`, `z_ss`, `margin`, `params`). Reconstruction
 controls:
 - `H_init`    : initial thickness (defaults to a plastic solve at a nominal uniform `τ_b`)
 - `n_outer`   : maximum outer iterations
@@ -69,7 +69,7 @@ configurations, but stiffer or finer grids need a smaller `relax` and more `n_ou
 (the trade is robustness vs. iterations).
 """
 function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, dx::Real, dy::Real;
-                          rheology::GlenRheology, sliding::SlidingLaw, z_ss = 0.0,
+                          rheology::GlenRheology, sliding::SlidingLaw, z_ss = 0.0, margin = :face,
                           params::PlasticParams = PlasticParams(), H_init = nothing,
                           n_outer::Int = 1000, relax = 0.05, tol = 1.0, τ_hi = 5.0e5,
                           max_sweeps::Int = 400, sweep_tol = 1e-9)
@@ -78,9 +78,10 @@ function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, 
     smbf = _as_field(smb, size(z_b), "smb")
 
     H = H_init === nothing ?
-        last(solve(z_b, 5.0e4, mask; dx, dy, z_ss, params = p, mode = :flat, max_sweeps, tol = sweep_tol)) :
+        last(solve(z_b, 5.0e4, mask; dx, dy, z_ss, margin, params = p, mode = :flat, max_sweeps, tol = sweep_tol)) :
         copy(float.(H_init))
     bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), p)
+    dfac = _margin_dfac(mask, margin)
     w = _flux_width(dx, dy)
     τ_d = similar(H)
     z_s = @. ifelse(mask, H + z_b, z_b)
@@ -92,7 +93,7 @@ function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, 
             τ_d[k] = mask[k] ?
                 _invert_driving_stress(Q[k] / w, H[k], sliding, rheology, τ_hi) : zero(eltype(H))
         end
-        wnew = _solve_w(τ_d, z_b, mask, bc, dx, dy, p, :flat;
+        wnew = _solve_w(τ_d, z_b, mask, bc, dfac, dx, dy, p, :flat;
                         max_sweeps, tol = sweep_tol, n_outer = 1, outer_tol = 1.0)
         Hnew = @. ifelse(mask, sqrt(max(wnew, zero(eltype(wnew)))), zero(eltype(wnew)))
         Δ = maximum(abs.(Hnew .- H))

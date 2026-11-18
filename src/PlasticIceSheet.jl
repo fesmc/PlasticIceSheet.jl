@@ -25,7 +25,7 @@ include("io.jl")
 export PlasticParams, solve
 export ice_volume, ice_area, surface_misfit
 export flotation_thickness, godunov_eikonal, sweep_eikonal, godunov_residual
-export differentiable_thickness
+export differentiable_thickness, margin_frac_from_sdist
 export load_plastic_inputs, save_reconstruction
 export GlenRheology, deformational_velocity
 export SlidingLaw, LinearSliding, WeertmanSliding, RegularizedCoulomb, basal_velocity

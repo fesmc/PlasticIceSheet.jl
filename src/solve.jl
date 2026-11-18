@@ -7,24 +7,95 @@
 # land (clamp-to-edge); pad the mask with at least one ice-free cell for a clean
 # margin everywhere.
 
-# --- core fast sweeping -----------------------------------------------------------
+# --- margin position --------------------------------------------------------------
+
+# Floor of the spacing factor to an ice-free neighbour, (1 − margin_frac) ≥ MARGIN_DMIN:
+# keeps the update well conditioned as the margin approaches an ice-cell centre.
+const MARGIN_DMIN = 0.01
+
+# Spacing factor to each cell as a neighbour: 1 on ice cells; on ice-free cells
+# max(1 − f, MARGIN_DMIN), where the margin lies f·Δ from the ice-free cell centre:
+# f = 0.5 for `:face` (margin on the cell face), 0 for `:centre` (on the ice-free cell
+# centre), or a per-cell field `margin_frac` ∈ [0, 1) on the ice-free cells.
+function _margin_dfac(mask, margin)
+    if margin isa Symbol
+        f0 = margin === :face   ? 0.5 :
+             margin === :centre ? 0.0 :
+             throw(ArgumentError("margin must be :face, :centre or a margin_frac field, got :$margin"))
+        return [m ? 1.0 : max(1 - f0, MARGIN_DMIN) for m in mask]
+    end
+    size(margin) == size(mask) || throw(DimensionMismatch("margin_frac and mask must match"))
+    all(k -> mask[k] || 0 <= margin[k] < 1, eachindex(mask)) ||
+        throw(ArgumentError("margin_frac must be in [0, 1) on ice-free cells"))
+    return [mask[k] ? 1.0 : max(1 - float(margin[k]), MARGIN_DMIN) for k in eachindex(IndexCartesian(), mask)]
+end
+
+"""
+    margin_frac_from_sdist(sdist, mask, dx, dy)
+
+Margin position from a signed distance to the margin, `sdist` (m; positive in the ice,
+negative outside, at the cell centres), for the `margin` keyword of [`solve`](@ref): on
+an ice-free cell with an ice neighbour, `−sdist/h` clamped to `[0, 1 − MARGIN_DMIN]`,
+`h = √(dx dy)`; 0 elsewhere. The value is isotropic: exact for margins along a grid axis.
+"""
+function margin_frac_from_sdist(sdist, mask, dx, dy)
+    size(sdist) == size(mask) || throw(DimensionMismatch("sdist and mask must match"))
+    nx, ny = size(mask)
+    h = sqrt(dx * dy)
+    frac = zeros(nx, ny)
+    @inbounds for j in 1:ny, i in 1:nx
+        mask[i, j] && continue
+        next_to_ice = mask[max(i - 1, 1), j] || mask[min(i + 1, nx), j] ||
+                      mask[i, max(j - 1, 1)] || mask[i, min(j + 1, ny)]
+        next_to_ice && (frac[i, j] = clamp(-sdist[i, j] / h, 0.0, 1 - MARGIN_DMIN))
+    end
+    return frac
+end
+
+# --- Godunov update and fast sweeping ----------------------------------------------
+
+# The local update solved at each cell: the eikonal |∇u| = F (`_Eikonal`, u = H²).
+struct _Eikonal end
+@inline _kernel(::_Eikonal, a, da, b, db, F, zb) = godunov_eikonal(a, da, b, db, F)
+
+# Godunov update at ice cell (i, j) from its four neighbours (clamp-to-edge). The spacing
+# to a neighbour is Δ·dfac: < Δ for an ice-free neighbour whose margin lies between the
+# centres. With equal factors on both sides of an axis the upwind value is the smaller
+# neighbour; otherwise the axis term is max over the sides of (u − a_s)₊/d_s, i.e. the
+# update is the minimum over the side combinations (each candidate is monotone, hence so
+# is the minimum).
+@inline function _update_at(kern, u, Fij, zbij, dfac, i::Int, j::Int, dx, dy)
+    nx, ny = size(u)
+    im = i > 1  ? i - 1 : 1
+    ip = i < nx ? i + 1 : nx
+    jm = j > 1  ? j - 1 : 1
+    jp = j < ny ? j + 1 : ny
+    xsame = dfac[im, j] == dfac[ip, j]
+    ysame = dfac[i, jm] == dfac[i, jp]
+    a1 = xsame ? min(u[im, j], u[ip, j]) : u[im, j]
+    b1 = ysame ? min(u[i, jm], u[i, jp]) : u[i, jm]
+    da1 = dx * dfac[im, j]
+    db1 = dy * dfac[i, jm]
+    unew = _kernel(kern, a1, da1, b1, db1, Fij, zbij)
+    xsame && ysame && return unew
+    a2, da2 = u[ip, j], dx * dfac[ip, j]
+    b2, db2 = u[i, jp], dy * dfac[i, jp]
+    xsame || (unew = min(unew, _kernel(kern, a2, da2, b1, db1, Fij, zbij)))
+    ysame || (unew = min(unew, _kernel(kern, a1, da1, b2, db2, Fij, zbij)))
+    xsame || ysame || (unew = min(unew, _kernel(kern, a2, da2, b2, db2, Fij, zbij)))
+    return unew
+end
 
 # One Gauss–Seidel sweep in a given (xdir, ydir) ordering. Updates only ice cells,
 # keeps the monotone min, and returns the largest decrease seen this sweep.
-function _sweep_once!(u, F, mask, dx, dy, xdir::Int, ydir::Int)
+function _sweep_once!(kern, u, F, zb, mask, dfac, dx, dy, xdir::Int, ydir::Int)
     nx, ny = size(u)
     change = zero(eltype(u))
     irange = xdir > 0 ? (1:nx) : (nx:-1:1)
     jrange = ydir > 0 ? (1:ny) : (ny:-1:1)
     @inbounds for j in jrange, i in irange
         mask[i, j] || continue
-        im = i > 1  ? i - 1 : 1
-        ip = i < nx ? i + 1 : nx
-        jm = j > 1  ? j - 1 : 1
-        jp = j < ny ? j + 1 : ny
-        a = min(u[im, j], u[ip, j])
-        b = min(u[i, jm], u[i, jp])
-        unew = godunov_eikonal(a, dx, b, dy, F[i, j])
+        unew = _update_at(kern, u, F[i, j], zb === nothing ? 0.0 : zb[i, j], dfac, i, j, dx, dy)
         if unew < u[i, j]
             change = max(change, u[i, j] - unew)
             u[i, j] = unew
@@ -33,18 +104,8 @@ function _sweep_once!(u, F, mask, dx, dy, xdir::Int, ydir::Int)
     return change
 end
 
-"""
-    sweep_eikonal(F, mask, bc, dx, dy; max_sweeps=200, tol=1e-6)
-
-Solve `|∇u| = F` on the cells where `mask` is true, with Dirichlet values supplied by
-`bc` on the ice-free cells. `F`, `bc` are per-cell arrays; `dx`, `dy` the spacings.
-Returns the field `u` (ice-free cells retain their `bc` value).
-
-The four diagonal sweep orderings are alternated so the scheme converges in O(N) for
-any characteristic direction. A fixed `max_sweeps` makes the routine reproducible
-under AD; `tol` provides an early exit for the forward solve.
-"""
-function sweep_eikonal(F, mask, bc, dx, dy; max_sweeps::Int = 200, tol = 1e-6)
+# Fast sweeping for the local update `kern`, from Inf on the ice cells and `bc` elsewhere.
+function _sweep(kern, F, zb, mask, bc, dfac, dx, dy; max_sweeps::Int, tol)
     T = promote_type(eltype(F), eltype(bc), typeof(dx), typeof(dy))
     u = Matrix{T}(undef, size(mask)...)
     @inbounds for k in eachindex(u)
@@ -53,7 +114,7 @@ function sweep_eikonal(F, mask, bc, dx, dy; max_sweeps::Int = 200, tol = 1e-6)
     dirs = ((1, 1), (-1, 1), (-1, -1), (1, -1))
     for s in 1:max_sweeps
         xdir, ydir = dirs[mod1(s, 4)]
-        change = _sweep_once!(u, F, mask, dx, dy, xdir, ydir)
+        change = _sweep_once!(kern, u, F, zb, mask, dfac, dx, dy, xdir, ydir)
         # require a full cycle of four orderings before trusting the early exit
         if s >= 4 && isfinite(change) && change < tol
             break
@@ -61,6 +122,21 @@ function sweep_eikonal(F, mask, bc, dx, dy; max_sweeps::Int = 200, tol = 1e-6)
     end
     return u
 end
+
+"""
+    sweep_eikonal(F, mask, bc, dx, dy; margin=:face, max_sweeps=200, tol=1e-6)
+
+Solve `|∇u| = F` on the cells where `mask` is true, with Dirichlet values supplied by
+`bc` on the ice-free cells, placed at the margin position `margin` (see [`solve`](@ref)).
+`F`, `bc` are per-cell arrays; `dx`, `dy` the spacings. Returns the field `u` (ice-free
+cells retain their `bc` value).
+
+The four diagonal sweep orderings are alternated so the scheme converges in O(N) for
+any characteristic direction. A fixed `max_sweeps` makes the routine reproducible
+under AD; `tol` provides an early exit for the forward solve.
+"""
+sweep_eikonal(F, mask, bc, dx, dy; margin = :face, max_sweeps::Int = 200, tol = 1e-6) =
+    _sweep(_Eikonal(), F, nothing, mask, bc, _margin_dfac(mask, margin), dx, dy; max_sweeps, tol)
 
 # --- boundary values --------------------------------------------------------------
 
@@ -113,14 +189,14 @@ end
 # converges it to the same fixed point — i.e. to a vanishing `godunov_residual`, which is
 # also what makes the implicit-diff gradient exact. Smaller `relax` is more robust on
 # steep relief but needs more iterations.
-function _solve_w(τ_bf, z_b, mask, bc, dx, dy, p::PlasticParams, mode::Symbol;
+function _solve_w(τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Symbol;
                   max_sweeps::Int, tol, n_outer::Int, outer_tol, relax = 0.5)
     G = _driving_rhs(τ_bf, τ_bf, z_b, dx, dy, p, :flat)   # flat RHS (w arg unused for :flat)
-    w = sweep_eikonal(G, mask, bc, dx, dy; max_sweeps, tol)
+    w = _sweep(_Eikonal(), G, nothing, mask, bc, dfac, dx, dy; max_sweeps, tol)
     if mode === :full
         for _ in 1:n_outer
             F = _driving_rhs(w, τ_bf, z_b, dx, dy, p, :full)
-            wc = sweep_eikonal(F, mask, bc, dx, dy; max_sweeps, tol)
+            wc = _sweep(_Eikonal(), F, nothing, mask, bc, dfac, dx, dy; max_sweeps, tol)
             wnew = @. (1 - relax) * w + relax * wc
             conv = maximum(abs.(sqrt.(max.(wnew, 0)) .- sqrt.(max.(w, 0))))
             w = wnew
@@ -130,34 +206,24 @@ function _solve_w(τ_bf, z_b, mask, bc, dx, dy, p::PlasticParams, mode::Symbol;
     return w
 end
 
-# Godunov update at a single cell from the current field (clamp-to-edge, upwind min).
-@inline function _godunov_at(w, F, i::Int, j::Int, dx, dy)
-    nx, ny = size(w)
-    im = i > 1  ? i - 1 : 1
-    ip = i < nx ? i + 1 : nx
-    jm = j > 1  ? j - 1 : 1
-    jp = j < ny ? j + 1 : ny
-    a = min(w[im, j], w[ip, j])
-    b = min(w[i, jm], w[i, jp])
-    return godunov_eikonal(a, dx, b, dy, F[i, j])
-end
-
 """
-    godunov_residual(w, τ_bf, z_b, mask, bc, dx, dy, params, mode)
+    godunov_residual(w, τ_bf, z_b, mask, bc, dfac, dx, dy, params, mode)
 
 Optimality conditions satisfied (≈ 0) by the converged field `w = H²`, returned with the
-same shape as `w`: `w − (Godunov update)` on ice cells, `w − bc` on ice-free cells. This
-is the residual the implicit-differentiation extension differentiates; it shares
-`_driving_rhs` and `_godunov_at` with the forward solver so the two cannot diverge.
+same shape as `w`: `w − (Godunov update)` on ice cells, `w − bc` on ice-free cells. `dfac`
+is the margin spacing factor (internal `_margin_dfac(mask, margin)`). This is the residual
+the implicit-differentiation extension differentiates; it shares `_driving_rhs` and
+`_update_at` with the forward solver so the two cannot diverge.
 """
-function godunov_residual(w, τ_bf, z_b, mask, bc, dx, dy, p::PlasticParams, mode::Symbol)
+function godunov_residual(w, τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Symbol)
     F = _driving_rhs(w, τ_bf, z_b, dx, dy, p, mode)
     nx, ny = size(w)
     # Promote so the residual carries duals whether τ_b or w is the differentiation seed.
     T = promote_type(eltype(w), eltype(F), eltype(bc))
     r = Matrix{T}(undef, nx, ny)
     @inbounds for j in 1:ny, i in 1:nx
-        r[i, j] = mask[i, j] ? w[i, j] - _godunov_at(w, F, i, j, dx, dy) : w[i, j] - bc[i, j]
+        r[i, j] = mask[i, j] ? w[i, j] - _update_at(_Eikonal(), w, F[i, j], 0.0, dfac, i, j, dx, dy) :
+                               w[i, j] - bc[i, j]
     end
     return r
 end
@@ -165,7 +231,7 @@ end
 # --- top-level solve --------------------------------------------------------------
 
 """
-    solve(z_b, τ_b, mask; dx, dy, z_ss=0.0, mode=:full, params=PlasticParams(),
+    solve(z_b, τ_b, mask; dx, dy, z_ss=0.0, margin=:face, mode=:full, params=PlasticParams(),
           max_sweeps=200, tol=1e-6, n_outer=100, outer_tol=1e-3, relax=0.5)
 
 Reconstruct a perfectly-plastic, steady-state ice sheet.
@@ -179,6 +245,11 @@ Inputs (all matrices share the same `(nx, ny)` shape unless noted):
            thickness `(ρ_w/ρ_i) max(z_ss − z_b, 0)`
 
 Options:
+- `margin`: where the margin lies between an ice cell and an ice-free neighbour —
+            `:face` (default, on the cell face), `:centre` (on the ice-free cell centre;
+            the behaviour before v0.2), or a field `margin_frac` ∈ [0, 1) on the ice-free
+            cells, the distance of the margin from the ice-free cell centre as a fraction
+            of the spacing (e.g. from [`margin_frac_from_sdist`](@ref))
 - `mode`  : `:full` (default, full Hamilton–Jacobi over arbitrary bed relief) or
             `:flat` (flat-bed eikonal, `|∇H| ≈ |∇z_s|`; exact when bed relief ≪ H)
 - `params`: `PlasticParams`
@@ -194,7 +265,7 @@ margin) also get `H = 0`, with a warning.
 The whole computation is differentiable w.r.t. `τ_b`; see the Algorithms page of the docs (§7).
 """
 function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
-               dx::Real, dy::Real, z_ss = 0.0, mode::Symbol = :full,
+               dx::Real, dy::Real, z_ss = 0.0, margin = :face, mode::Symbol = :full,
                params::PlasticParams = PlasticParams(),
                max_sweeps::Int = 200, tol = 1e-6,
                n_outer::Int = 100, outer_tol = 1e-3, relax = 0.5)
@@ -203,7 +274,8 @@ function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
     p = params
     τ_bf = _as_field(τ_b, size(z_b), "τ_b")
     bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), p)
-    w = _solve_w(τ_bf, z_b, mask, bc, dx, dy, p, mode; max_sweeps, tol, n_outer, outer_tol, relax)
+    dfac = _margin_dfac(mask, margin)
+    w = _solve_w(τ_bf, z_b, mask, bc, dfac, dx, dy, p, mode; max_sweeps, tol, n_outer, outer_tol, relax)
     return _geometry_from_w(w, z_b, mask)
 end
 

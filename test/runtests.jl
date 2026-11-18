@@ -17,9 +17,10 @@ const ρg = p.ρ_i * p.g
     @test godunov_eikonal(1.0, 1.0, 4.0, 1.0, 0.0) ≈ 1.0
 end
 
-@testset "1-D strip vs analytic Nye profile" begin
-    # Ice strip between land margins at i=1 and i=nx, uniform in y. The eikonal
-    # distance to the nearest margin gives H(d) = sqrt(2τ_b/(ρg) · d).
+@testset "1-D strip vs analytic Nye profile, margin positions" begin
+    # Ice strip between land margins at i=1 and i=nx, uniform in y. The eikonal distance
+    # d to the nearest margin gives H(d) = sqrt(2τ_b/(ρg) · d); the margin lies f·dx from
+    # the ice-free cell centre (`:centre` f = 0, `:face` f = 1/2, or a per-cell field).
     nx, ny = 60, 8
     dx = dy = 1000.0
     τ_b = 1.0e5
@@ -27,17 +28,38 @@ end
     mask = trues(nx, ny)
     mask[1, :] .= false
     mask[nx, :] .= false
-
-    z_s, H = solve(z_b, τ_b, mask; dx, dy, mode = :flat, max_sweeps = 400, tol = 1e-9)
-
     c = 2τ_b / ρg
     j = ny ÷ 2
-    @testset "i=$i" for i in 3:(nx - 2)
-        d = dx * min(i - 1, nx - i)
-        @test H[i, j] ≈ sqrt(c * d) rtol = 1e-3
+    frac(fl, fr) = [i == 1 ? fl : i == nx ? fr : 0.0 for i in 1:nx, _ in 1:ny]
+    cases = [(:centre, 0.0, 0.0), (:face, 0.5, 0.5), (frac(0.3, 0.77), 0.3, 0.77),
+             (frac(0.95, 0.05), 0.95, 0.05)]
+    for (margin, fl, fr) in cases
+        _, H = solve(z_b, τ_b, mask; dx, dy, margin, mode = :flat, max_sweeps = 400, tol = 1e-12)
+        d = [dx * min(i - 1 - fl, nx - i - fr) for i in 2:(nx - 1)]
+        @test H[2:(nx - 1), j] ≈ sqrt.(c .* d) rtol = 1e-10
+        @test all(H[1, :] .== 0) && all(H[nx, :] .== 0)
     end
-    # Margins carry zero thickness.
-    @test all(H[1, :] .== 0) && all(H[nx, :] .== 0)
+    @test_throws ArgumentError solve(z_b, τ_b, mask; dx, dy, margin = :edge)
+    @test_throws ArgumentError solve(z_b, τ_b, mask; dx, dy, margin = frac(1.0, 0.0))
+end
+
+@testset "margin_frac from a signed distance" begin
+    # Circular cap of radius R, off-grid centre: the sdist margin converges to the exact
+    # volume much better than the `:centre` staircase.
+    R, dx = 30.0e3, 2.0e3
+    n = 40
+    xc, yc = 0.37dx + n * dx / 2, 0.61dx + n * dx / 2
+    r = [hypot(i * dx - xc, j * dx - yc) for i in 1:n, j in 1:n]
+    mask = r .<= R
+    sdist = R .- r
+    frac = margin_frac_from_sdist(sdist, mask, dx, dx)
+    @test all(0 .<= frac .< 1) && all(iszero, frac[mask])
+    c = 2 * 1.0e5 / ρg
+    Hex = @. sqrt(c * max(R - r, 0)) * mask
+    vol(m) = sum(last(solve(zeros(n, n), 1.0e5, mask; dx, dy = dx, margin = m, mode = :flat,
+                            max_sweeps = 400, tol = 1e-10)))
+    err(m) = abs(vol(m) / sum(Hex) - 1)
+    @test err(frac) < err(:centre) / 4
 end
 
 @testset "marine margins with a sea-level field" begin
@@ -52,7 +74,7 @@ end
     _, H = solve(z_b, τ_b, mask; dx, dy, z_ss, mode = :flat, max_sweeps = 400, tol = 1e-9)
     c = 2τ_b / ρg
     Hl, Hr = flotation_thickness(-300.0, 0.0, p), flotation_thickness(-300.0, -100.0, p)
-    exact(i) = min(sqrt(Hl^2 + c * dx * (i - 1)), sqrt(Hr^2 + c * dx * (nx - i)))
+    exact(i) = min(sqrt(Hl^2 + c * dx * (i - 1.5)), sqrt(Hr^2 + c * dx * (nx - i - 0.5)))   # :face
     @test all(H[i, 3] ≈ exact(i) for i in 2:(nx - 1))
     @test_throws DimensionMismatch solve(z_b, τ_b, mask; dx, dy, z_ss = zeros(3, 3))
 end
@@ -102,7 +124,8 @@ end
     @test z_s_b[20, 20] > H0[20, 20]
     # The damped :full fixed point is genuinely reached (residual ≈ 0).
     bc = flotation_thickness.(z_b_bump, 0.0, Ref(p)) .^ 2
-    R = PlasticIceSheet.godunov_residual(Hb .^ 2, fill(τ_b, nx, ny), z_b_bump, mask, bc,
+    dfac = PlasticIceSheet._margin_dfac(mask, :face)
+    R = PlasticIceSheet.godunov_residual(Hb .^ 2, fill(τ_b, nx, ny), z_b_bump, mask, bc, dfac,
                                          dx, dy, p, :full)
     @test maximum(abs, R) < 1e-2
 end
@@ -256,7 +279,7 @@ end
     ci, cj = 31, 31
     @test vel.speed[ci, cj] ≈ basal_velocity(sl, τ_b) + deformational_velocity(r, τ_b, H[ci, cj])
     # Horizontal velocity vanishes at the divide and flows outward (down-gradient).
-    @test hypot(vel.ux[ci, cj], vel.uy[ci, cj]) == 0.0
+    @test hypot(vel.ux[ci, cj], vel.uy[ci, cj]) < 1e-8 * maximum(vel.speed)   # sweep-order rounding
     @test vel.ux[ci + 10, cj] > 0
     @test vel.uy[ci, cj + 10] > 0
     # Ice-free cells carry no velocity.
