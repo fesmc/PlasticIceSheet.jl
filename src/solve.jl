@@ -1,4 +1,5 @@
-# Fast-sweeping eikonal solver and the top-level plastic reconstruction.
+# Fast-sweeping solver (eikonal and plastic-surface updates) and the top-level plastic
+# reconstruction.
 #
 # The grounded-ice domain is given by a boolean `mask` (true = grounded ice). The
 # margin is the interface between mask=true and mask=false cells; the Dirichlet
@@ -54,9 +55,12 @@ end
 
 # --- Godunov update and fast sweeping ----------------------------------------------
 
-# The local update solved at each cell: the eikonal |∇u| = F (`_Eikonal`, u = H²).
+# The local update solved at each cell: the eikonal |∇u| = F (`_Eikonal`, u = H²), or the
+# plastic surface equation |∇z_s| = K/(z_s − z_b) (`_Surface`, u = z_s, K = τ_b/(ρ_i g)).
 struct _Eikonal end
+struct _Surface end
 @inline _kernel(::_Eikonal, a, da, b, db, F, zb) = godunov_eikonal(a, da, b, db, F)
+@inline _kernel(::_Surface, a, da, b, db, K, zb) = godunov_surface(a, da, b, db, zb, K)
 
 # Godunov update at ice cell (i, j) from its four neighbours (clamp-to-edge). The spacing
 # to a neighbour is Δ·dfac: < Δ for an ice-free neighbour whose margin lies between the
@@ -140,10 +144,18 @@ sweep_eikonal(F, mask, bc, dx, dy; margin = :face, max_sweeps::Int = 200, tol = 
 
 # --- boundary values --------------------------------------------------------------
 
-# Both modes solve for u = H² (which is non-singular at the margin, unlike the surface
-# z_s whose driving slope τ_b/(ρ_i g H) blows up as H→0). The margin Dirichlet value is the
-# squared flotation thickness (0 on land). `z_ss` is a scalar or a field.
-_bc_w(z_b, z_ss, p) = flotation_thickness.(z_b, z_ss, Ref(p)) .^ 2
+# Working variable u and its margin (Dirichlet) value on the ice-free cells:
+#   :flat, :full → u = w = H² (non-singular at the margin, unlike the driving slope
+#                  τ_b/(ρ_i g H) of the surface equation), bc = H_flt²
+#   :surface     → u = z_s, bc = z_b + H_flt (the edge-mean update integrates the margin
+#                  singularity, see `godunov_surface`)
+# H_flt is the flotation thickness (0 on land); `z_ss` is a scalar or a field.
+function _bc(z_b, z_ss, p, mode::Symbol)
+    H_flt = flotation_thickness.(z_b, z_ss, Ref(p))
+    mode === :surface && return z_b .+ H_flt
+    mode in (:flat, :full) || throw(ArgumentError("mode must be :surface, :flat or :full, got :$mode"))
+    return H_flt .^ 2
+end
 
 # Central-difference gradient of a field with clamp-to-edge (one-sided at array edges).
 function _grad(f, dx, dy)
@@ -182,15 +194,21 @@ function _driving_rhs(w, τ_bf, z_b, dx, dy, p::PlasticParams, mode::Symbol)
     return @. sqrt(max(G * G - 4 * sqrtw * dot_zbw - 4 * w * grad_zb2, (1e-3 * G)^2))
 end
 
-# Forward solve for w = H². Warm-starts the `:full` outer fixed point from `:flat`.
+# Forward solve for the working variable u (see `_bc`).
 #
-# The `:full` map "freeze Geff(w), re-solve the eikonal" is NOT contractive for steep beds
-# (Geff carries ∇w, so the undamped iteration oscillates). Under-relaxation by `relax`
-# converges it to the same fixed point — i.e. to a vanishing `godunov_residual`, which is
-# also what makes the implicit-diff gradient exact. Smaller `relax` is more robust on
-# steep relief but needs more iterations.
-function _solve_w(τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Symbol;
+# :surface — one fast-sweeping solve of the surface equation (proper, monotone scheme).
+# :flat    — one fast-sweeping solve of the w eikonal.
+# :full    — damped outer fixed point on w, started from :flat. The map "freeze Geff(w),
+#   re-solve the eikonal" is NOT contractive for steep beds (Geff carries ∇w, so the
+#   undamped iteration oscillates). Under-relaxation by `relax` converges it, where it
+#   converges, to the fixed point, i.e. to a vanishing `godunov_residual`, which is also
+#   what makes the implicit-diff gradient exact.
+function _solve_u(τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Symbol;
                   max_sweeps::Int, tol, n_outer::Int, outer_tol, relax = 0.5)
+    if mode === :surface
+        K = @. τ_bf / (p.ρ_i * p.g)
+        return _sweep(_Surface(), K, z_b, mask, bc, dfac, dx, dy; max_sweeps, tol)
+    end
     G = _driving_rhs(τ_bf, τ_bf, z_b, dx, dy, p, :flat)   # flat RHS (w arg unused for :flat)
     w = _sweep(_Eikonal(), G, nothing, mask, bc, dfac, dx, dy; max_sweeps, tol)
     if mode === :full
@@ -207,23 +225,26 @@ function _solve_w(τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Sy
 end
 
 """
-    godunov_residual(w, τ_bf, z_b, mask, bc, dfac, dx, dy, params, mode)
+    godunov_residual(u, τ_bf, z_b, mask, bc, dfac, dx, dy, params, mode)
 
-Optimality conditions satisfied (≈ 0) by the converged field `w = H²`, returned with the
-same shape as `w`: `w − (Godunov update)` on ice cells, `w − bc` on ice-free cells. `dfac`
-is the margin spacing factor (internal `_margin_dfac(mask, margin)`). This is the residual
-the implicit-differentiation extension differentiates; it shares `_driving_rhs` and
+Optimality conditions satisfied (≈ 0) by the converged working field `u` (`z_s` in
+`:surface` mode, `w = H²` in `:flat`/`:full`), returned with the same shape as `u`:
+`u − (Godunov update)` on ice cells, `u − bc` on ice-free cells. `dfac` is the margin
+spacing factor (internal `_margin_dfac(mask, margin)`). This is the residual the
+implicit-differentiation extension differentiates; it shares the kernels and
 `_update_at` with the forward solver so the two cannot diverge.
 """
-function godunov_residual(w, τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Symbol)
-    F = _driving_rhs(w, τ_bf, z_b, dx, dy, p, mode)
-    nx, ny = size(w)
-    # Promote so the residual carries duals whether τ_b or w is the differentiation seed.
-    T = promote_type(eltype(w), eltype(F), eltype(bc))
+function godunov_residual(u, τ_bf, z_b, mask, bc, dfac, dx, dy, p::PlasticParams, mode::Symbol)
+    kern, F, zb = mode === :surface ? (_Surface(), τ_bf ./ (p.ρ_i * p.g), z_b) :
+                  (_Eikonal(), _driving_rhs(u, τ_bf, z_b, dx, dy, p, mode), nothing)
+    nx, ny = size(u)
+    # Promote so the residual carries duals whether τ_b or u is the differentiation seed.
+    T = promote_type(eltype(u), eltype(F), eltype(bc))
     r = Matrix{T}(undef, nx, ny)
     @inbounds for j in 1:ny, i in 1:nx
-        r[i, j] = mask[i, j] ? w[i, j] - _update_at(_Eikonal(), w, F[i, j], 0.0, dfac, i, j, dx, dy) :
-                               w[i, j] - bc[i, j]
+        r[i, j] = mask[i, j] ?
+            u[i, j] - _update_at(kern, u, F[i, j], zb === nothing ? 0.0 : zb[i, j], dfac, i, j, dx, dy) :
+            u[i, j] - bc[i, j]
     end
     return r
 end
@@ -231,7 +252,7 @@ end
 # --- top-level solve --------------------------------------------------------------
 
 """
-    solve(z_b, τ_b, mask; dx, dy, z_ss=0.0, margin=:face, mode=:full, params=PlasticParams(),
+    solve(z_b, τ_b, mask; dx, dy, z_ss=0.0, margin=:face, mode=:surface, params=PlasticParams(),
           max_sweeps=200, tol=1e-6, n_outer=100, outer_tol=1e-3, relax=0.5)
 
 Reconstruct a perfectly-plastic, steady-state ice sheet.
@@ -250,12 +271,17 @@ Options:
             the behaviour before v0.2), or a field `margin_frac` ∈ [0, 1) on the ice-free
             cells, the distance of the margin from the ice-free cell centre as a fraction
             of the spacing (e.g. from [`margin_frac_from_sdist`](@ref))
-- `mode`  : `:full` (default, full Hamilton–Jacobi over arbitrary bed relief) or
-            `:flat` (flat-bed eikonal, `|∇H| ≈ |∇z_s|`; exact when bed relief ≪ H)
+- `mode`  : `:surface` (default) solves the plastic surface equation for `z_s` directly,
+            bed relief included, in one fast-sweeping solve (no outer iteration);
+            `:flat` solves the flat-bed eikonal `|∇(H²)| = 2τ_b/(ρ_i g)` and drapes it on
+            the bed (cheapest; equal to `:surface` on a flat bed); `:full` solves the
+            bed-corrected `H²` equation by a damped fixed point (kept for comparison;
+            does not converge on rough real beds)
 - `params`: `PlasticParams`
-- `max_sweeps`, `tol`        : inner eikonal fast-sweeping controls
-- `n_outer`, `outer_tol`, `relax` : `:full` damped fixed-point controls (ignored for
-  `:flat`). `relax` ∈ (0,1] is the under-relaxation factor; lower is more robust on steep
+- `max_sweeps`, `tol`        : fast-sweeping controls (`tol` on `z_s` in m for
+  `:surface`, on `H²` in m² otherwise)
+- `n_outer`, `outer_tol`, `relax` : `:full` damped fixed-point controls (ignored
+  otherwise). `relax` ∈ (0,1] is the under-relaxation factor; lower is more robust on steep
   beds but slower. The undamped map (`relax=1`) can oscillate over strong bed relief.
 
 Returns `(z_s, H)` — ice surface elevation and thickness (m). Ice-free cells have
@@ -265,7 +291,7 @@ margin) also get `H = 0`, with a warning.
 The whole computation is differentiable w.r.t. `τ_b`; see the Algorithms page of the docs (§7).
 """
 function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
-               dx::Real, dy::Real, z_ss = 0.0, margin = :face, mode::Symbol = :full,
+               dx::Real, dy::Real, z_ss = 0.0, margin = :face, mode::Symbol = :surface,
                params::PlasticParams = PlasticParams(),
                max_sweeps::Int = 200, tol = 1e-6,
                n_outer::Int = 100, outer_tol = 1e-3, relax = 0.5)
@@ -273,20 +299,21 @@ function solve(z_b::AbstractMatrix, τ_b, mask::AbstractMatrix{Bool};
     size(z_b) == size(mask) || throw(DimensionMismatch("z_b and mask must match"))
     p = params
     τ_bf = _as_field(τ_b, size(z_b), "τ_b")
-    bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), p)
+    bc = _bc(z_b, _as_field(z_ss, size(z_b), "z_ss"), p, mode)
     dfac = _margin_dfac(mask, margin)
-    w = _solve_w(τ_bf, z_b, mask, bc, dfac, dx, dy, p, mode; max_sweeps, tol, n_outer, outer_tol, relax)
-    return _geometry_from_w(w, z_b, mask)
+    u = _solve_u(τ_bf, z_b, mask, bc, dfac, dx, dy, p, mode; max_sweeps, tol, n_outer, outer_tol, relax)
+    return _geometry(u, z_b, mask, mode)
 end
 
-# (z_s, H) from w = H² on the ice. Ice cells the sweep never reached (Inf: an ice region
-# with no ice-free cell) get H = 0, with a warning.
-function _geometry_from_w(w, z_b, mask)
-    z0 = zero(eltype(w))   # not inside `@.`, which would dot `zero`/`eltype` and defeat inference
-    n_unreached = count(k -> mask[k] && !isfinite(w[k]), eachindex(w))
+# (z_s, H) from the working variable u (z_s or H², see `_bc`). Ice cells the sweep never
+# reached (Inf: an ice region with no ice-free cell) get H = 0, with a warning.
+function _geometry(u, z_b, mask, mode::Symbol)
+    z0 = zero(eltype(u))   # not inside `@.`, which would dot `zero`/`eltype` and defeat inference
+    n_unreached = count(k -> mask[k] && !isfinite(u[k]), eachindex(u))
     n_unreached > 0 &&
         @warn "$n_unreached ice cells not connected to an ice-free cell (H set to 0)"
-    H = @. ifelse(mask & isfinite(w), sqrt(max(w, z0)), z0)
+    H = mode === :surface ? (@. ifelse(mask & isfinite(u), max(u - z_b, z0), z0)) :
+                            (@. ifelse(mask & isfinite(u), sqrt(max(u, z0)), z0))
     z_s = @. ifelse(mask, H + z_b, z_b)
     return z_s, H
 end

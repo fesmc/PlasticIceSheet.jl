@@ -130,6 +130,77 @@ end
     @test maximum(abs, R) < 1e-2
 end
 
+@testset "surface kernel: solves its equation, proper and monotone" begin
+    # Deterministic pseudo-random cases (no Random dependency).
+    cnt = Ref(0)
+    rnd() = (cnt[] += 1; x = sin(cnt[] * 12.9898) * 43758.5453; x - floor(x))
+    P(h, α) = max(h - α, 0) * (h + max(α, 0)) / 2
+    for _ in 1:20_000
+        zb = 2000 * (rnd() - 0.5)
+        k = 10 + 200 * rnd()
+        da, db = 500 + 4000 * rnd(), 500 + 4000 * rnd()
+        a = zb + 1200 * (rnd() - 0.5)
+        b = rnd() < 0.1 ? Inf : zb + 1200 * (rnd() - 0.5)
+        u = godunov_surface(a, da, b, db, zb, k)
+        h = u - zb
+        @test h > 0
+        @test abs(sqrt((P(h, a - zb) / da)^2 + (isfinite(b) ? (P(h, b - zb) / db)^2 : 0.0)) - k) < 1e-8 * k
+        @test godunov_surface(a + 1, da, b, db, zb, k) >= u - 1e-9    # nondecreasing in a
+        isfinite(b) && @test godunov_surface(a, da, b + 1, db, zb, k) >= u - 1e-9
+    end
+end
+
+@testset "surface mode: Nye strip, sloped bed, bed bump" begin
+    c = 2 * 1.0e5 / ρg
+    # Flat bed: surface ≡ flat (exact Nye profile).
+    nx, ny = 60, 4
+    mask = trues(nx, ny); mask[1, :] .= false; mask[nx, :] .= false
+    _, Hs = solve(zeros(nx, ny), 1.0e5, mask; dx = 1000.0, dy = 1000.0, max_sweeps = 400, tol = 1e-10)
+    _, Hf = solve(zeros(nx, ny), 1.0e5, mask; dx = 1000.0, dy = 1000.0, mode = :flat,
+                  max_sweeps = 400, tol = 1e-12)
+    @test maximum(abs, Hs .- Hf) < 1e-8
+
+    # 1-D bed z_b = s x rising inland from a land margin: reference from the ODE
+    # dw/dx = 2k − 2 s √w (w = H², x from the margin), RK4 on a fine grid.
+    L, sl, k, hs = 100.0e3, 5.0e-3, c / 2, 0.25
+    nref = round(Int, L / hs)
+    wref = zeros(nref + 1)
+    f(w) = 2k - 2sl * sqrt(max(w, 0.0))
+    for i in 1:nref
+        w0 = wref[i]
+        k1 = f(w0); k2 = f(w0 + hs / 2 * k1); k3 = f(w0 + hs / 2 * k2); k4 = f(w0 + hs * k3)
+        wref[i + 1] = w0 + hs * (k1 + 2k2 + 2k3 + k4) / 6
+    end
+    function slope_err(dx, mode)
+        n = round(Int, L / dx) + 1
+        z_b = [sl * dx * (i - 1) for i in 1:n, _ in 1:3]
+        m = trues(n, 3); m[1, :] .= false
+        _, H = solve(z_b, 1.0e5, m; dx, dy = dx, mode, max_sweeps = 1000, tol = 1e-10)
+        maximum(abs(H[i, 2] - sqrt(wref[round(Int, dx * (i - 1.5) / hs) + 1]))
+                for i in 2:n if dx * (i - 1.5) >= 5000)
+    end
+    es = [slope_err(dx, :surface) for dx in (4000.0, 2000.0, 1000.0)]
+    @test es[3] < es[2] < es[1]
+    @test es[3] < 0.02 * slope_err(1000.0, :flat)
+
+    # Bed bump where :full converges: surface → full under refinement, flat does not.
+    function bump(dx)
+        n = round(Int, 80.0e3 / dx)
+        xy = [((i - 0.5) * dx - 40.0e3, (j - 0.5) * dx - 40.0e3) for i in 1:n, j in 1:n]
+        z_b = [300 * exp(-(x^2 + y^2) / (2 * 2.0e4^2)) for (x, y) in xy]
+        m = [hypot(x, y) <= 30.0e3 for (x, y) in xy]
+        inner = [hypot(x, y) <= 24.0e3 for (x, y) in xy]
+        o = (; dx, dy = dx, max_sweeps = 1000, tol = 1e-10)
+        Hs = last(solve(z_b, 1.0e5, m; o...))
+        Hh = last(solve(z_b, 1.0e5, m; o..., mode = :full))
+        Hf = last(solve(z_b, 1.0e5, m; o..., mode = :flat))
+        return maximum(abs, (Hs .- Hh)[inner]), maximum(abs, (Hf .- Hh)[inner])
+    end
+    (d2, _), (d1, f1) = bump(2000.0), bump(1000.0)
+    @test d1 < d2
+    @test d1 < 0.2 * f1
+end
+
 @testset "AD: ∂(volume)/∂τ_b via ForwardDiff matches finite difference" begin
     nx, ny = 36, 36
     dx = dy = 2000.0
@@ -191,6 +262,12 @@ end
     @test size(g_rev) == size(τ_b0)
     @test g_rev ≈ g_fwd rtol = 1e-4
     @test sum(g_rev) > 0          # raising τ_b everywhere thickens the ice ⇒ more volume
+
+    # :surface (the default): reverse mode equals forward mode through the sweeps.
+    sks = (; dx, dy, max_sweeps = 400, tol = 1e-12)
+    gs_rev = Zygote.gradient(τ_b -> ice_volume(differentiable_thickness(τ_b, z_b, mask; sks...), dx, dy), τ_b0)[1]
+    gs_fwd = ForwardDiff.gradient(τ_b -> ice_volume(last(solve(z_b, τ_b, mask; sks...)), dx, dy), τ_b0)
+    @test gs_rev ≈ gs_fwd rtol = 1e-6
 
     # Also confirm the :flat reverse-mode gradient is exact (clean eikonal residual).
     skf = (; dx, dy, mode = :flat, max_sweeps = 400, tol = 1e-10)

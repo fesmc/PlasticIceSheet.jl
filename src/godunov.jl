@@ -49,3 +49,78 @@ information yet), in which case the update degenerates to the one-sided form.
     # Otherwise the smaller single-axis update governs.
     return min(a + F * da, b + F * db)
 end
+
+"""
+    godunov_surface(a, da, b, db, zb, k)
+
+Godunov update of the plastic surface equation `|∇z_s| = k / H`, `H = z_s − zb`,
+`k = τ_b/(ρ_i g)`, for the surface `u = z_s` of a cell with bed `zb`, from the upwind
+(smaller) neighbour surfaces `a` (spacing `da`) and `b` (spacing `db`); `Inf` means no
+upwind information.
+
+Each axis contributes the difference `(u − a)₊` times the edge-mean thickness
+`(H + (a − zb)₊)/2`, with the neighbour thickness measured from this cell's bed:
+
+    P_a(H) = (H − α)₊ (H + α₊) / 2,   α = a − zb,
+    (P_a/da)² + (P_b/db)² = k².
+
+`P_a` increases with `H` (the Hamiltonian is proper) and does not increase with `a`
+(monotone scheme), so fast sweeping applies directly, with no outer iteration. The edge
+mean integrates the margin singularity exactly on a flat bed (the Nye profile, as the
+`w = H²` eikonal); a cell-centred `k/H` would put the first ice cell at `√(k dx)` instead
+of `√(2k dx)`. Where both neighbours stand above `zb` the update is the `w`-eikonal with
+`w_a = α²`, `F = 2k`, in closed form (for the increment over the smaller `w_a`, free of
+cancellation); otherwise the two-sided root is found by Newton from the smaller
+one-sided root (`P²` is convex and increasing there, so Newton decreases monotonically).
+"""
+@inline function godunov_surface(a, da, b, db, zb, k)
+    fa, fb = isfinite(a), isfinite(b)
+    T = float(promote_type(typeof(a), typeof(da), typeof(b), typeof(db), typeof(zb), typeof(k)))
+    (fa || fb) || return T(Inf)
+    k > 0 || return T(max(zb, min(a, b)))
+
+    al = fa ? a - zb : zero(T)
+    be = fb ? b - zb : zero(T)
+
+    # Both neighbour surfaces at or above this bed: the w-eikonal (w = H², F = 2k).
+    if al >= 0 && be >= 0
+        !fa && return T(zb + sqrt(be * be + 2 * k * db))
+        !fb && return T(zb + sqrt(al * al + 2 * k * da))
+        wa, wb = al * al, be * be
+        wm, dm, c, dother = wa <= wb ? (wa, da, wb - wa, db) : (wb, db, wa - wb, da)
+        dw = 2 * k * dm                                   # one-sided in the smaller neighbour
+        if dw > c                                         # both axes upwind: root in (c, dw)
+            qa = 1 / (dm * dm) + 1 / (dother * dother)
+            dw = (c / (dother * dother) +
+                  sqrt(max(qa * (2k)^2 - (c / (dm * dother))^2, zero(c)))) / qa
+        end
+        return T(zb + sqrt(wm + dw))
+    end
+
+    # One-sided roots P(H) = k d; the smaller one bounds the two-sided root.
+    hA = fa ? _surface_one_sided(al, k * da) : T(Inf)
+    hB = fb ? _surface_one_sided(be, k * db) : T(Inf)
+    h0, other = hA <= hB ? (hA, b) : (hB, a)
+    (!isfinite(other) || zb + h0 <= other) && return T(zb + h0)
+
+    # Two-sided: Newton on φ(H) = (P_a/da)² + (P_b/db)² − k² from H = h0.
+    h = h0
+    alp, bep = max(al, zero(al)), max(be, zero(be))
+    for _ in 1:60
+        pa = (h - al) * (h + alp) / 2
+        pb = (h - be) * (h + bep) / 2
+        dpa = (2h + alp - al) / 2
+        dpb = (2h + bep - be) / 2
+        φ = (pa / da)^2 + (pb / db)^2 - k * k
+        dφ = 2 * (pa * dpa / (da * da) + pb * dpb / (db * db))
+        (φ > 0 && dφ > 0) || break
+        dh = φ / dφ
+        h -= dh
+        dh <= 1e-14 * h && break
+    end
+    return T(zb + h)
+end
+
+# Root H > 0 of (H − α)(H + α₊)/2 = k d (written without cancellation for α < 0).
+@inline _surface_one_sided(al, kd) =
+    al >= 0 ? sqrt(al * al + 2kd) : 4kd / (sqrt(al * al + 8kd) - al)

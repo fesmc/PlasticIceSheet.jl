@@ -80,7 +80,7 @@ function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, 
     H = H_init === nothing ?
         last(solve(z_b, 5.0e4, mask; dx, dy, z_ss, margin, params = p, mode = :flat, max_sweeps, tol = sweep_tol)) :
         copy(float.(H_init))
-    bc = _bc_w(z_b, _as_field(z_ss, size(z_b), "z_ss"), p)
+    bc = _bc(z_b, _as_field(z_ss, size(z_b), "z_ss"), p, :flat)
     dfac = _margin_dfac(mask, margin)
     w = _flux_width(dx, dy)
     τ_d = similar(H)
@@ -93,7 +93,7 @@ function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, 
             τ_d[k] = mask[k] ?
                 _invert_driving_stress(Q[k] / w, H[k], sliding, rheology, τ_hi) : zero(eltype(H))
         end
-        wnew = _solve_w(τ_d, z_b, mask, bc, dfac, dx, dy, p, :flat;
+        wnew = _solve_u(τ_d, z_b, mask, bc, dfac, dx, dy, p, :flat;
                         max_sweeps, tol = sweep_tol, n_outer = 1, outer_tol = 1.0)
         Hnew = @. ifelse(mask, sqrt(max(wnew, zero(eltype(wnew)))), zero(eltype(wnew)))
         Δ = maximum(abs.(Hnew .- H))
