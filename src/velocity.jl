@@ -33,7 +33,8 @@ end
 Local DIVA depth-averaged velocity on the fixed plastic geometry. Flow follows
 [`flow_direction`](@ref); the speed is the sum of an internal-deformation part
 ([`deformational_velocity`](@ref) with the driving stress `τ = τ_b`) and a basal-sliding
-part ([`basal_velocity`](@ref) for `sliding`). `τ_b` may be a scalar or a field. Ice-free
+part ([`basal_velocity`](@ref) for `sliding`, its coefficient per cell if a field). `τ_b`
+may be a scalar or a field. Ice-free
 cells return zero velocity.
 
 Returns a named tuple with everything exposed:
@@ -51,8 +52,8 @@ function diva_velocity(z_s, H, τ_b, mask, dx, dy;
                        rheology::GlenRheology, sliding::SlidingLaw, slope_eps = 1.0e-6)
     size(z_s) == size(H) == size(mask) ||
         throw(DimensionMismatch("z_s, H, mask must share shape"))
-    τ_bf = τ_b isa Number ? fill(float(τ_b), size(z_s)) : τ_b
-    size(τ_bf) == size(z_s) || throw(DimensionMismatch("τ_b and z_s must match"))
+    τ_bf = _as_field(τ_b, size(z_s), "τ_b")
+    _check_law(sliding, size(z_s))
 
     ex, ey = flow_direction(z_s, dx, dy; slope_eps)
     T = promote_type(eltype(H), eltype(τ_bf), eltype(ex))
@@ -65,7 +66,7 @@ function diva_velocity(z_s, H, τ_b, mask, dx, dy;
     @inbounds for k in eachindex(z_s)
         mask[k] || continue
         udk = deformational_velocity(rheology, τ_bf[k], H[k])
-        ubk = basal_velocity(sliding, τ_bf[k])
+        ubk = basal_velocity(_law_at(sliding, k), τ_bf[k])
         s = ubk + udk
         u_def[k] = udk
         u_b[k] = ubk

@@ -76,6 +76,7 @@ function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, 
     size(z_b) == size(mask) || throw(DimensionMismatch("z_b and mask must match"))
     p = params
     smbf = _as_field(smb, size(z_b), "smb")
+    _check_law(sliding, size(z_b))
 
     H = H_init === nothing ?
         last(solve(z_b, 5.0e4, mask; dx, dy, z_ss, margin, params = p, mode = :flat, max_sweeps, tol = sweep_tol)) :
@@ -91,7 +92,7 @@ function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, 
         Q = balance_flux(z_s, mask, smbf, dx, dy)
         @inbounds for k in eachindex(H)
             τ_d[k] = mask[k] ?
-                _invert_driving_stress(Q[k] / w, H[k], sliding, rheology, τ_hi) : zero(eltype(H))
+                _invert_driving_stress(Q[k] / w, H[k], _law_at(sliding, k), rheology, τ_hi) : zero(eltype(H))
         end
         wnew = _solve_u(τ_d, z_b, mask, bc, dfac, dx, dy, p, :flat;
                         max_sweeps, tol = sweep_tol, n_outer = 1, outer_tol = 1.0)

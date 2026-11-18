@@ -351,6 +351,27 @@ end
     # Low-speed limit approaches the matching Weertman power law u_b ∝ τ_bᵐ.
     small = 1.0e3
     @test basal_velocity(rc, small) ≈ rc.u_0 * (small / rc.C)^rc.m rtol = 1e-2
+    # Speed cap: min(u_b, u_max) below the Coulomb cap, u_max at and above it.
+    rcm = RegularizedCoulomb(C = 1.0e5, u_0 = 100.0, m = 3.0, u_max = 500.0)
+    @test basal_velocity(rcm, 0.5e5) == basal_velocity(rc, 0.5e5)
+    @test basal_velocity(rcm, 0.99e5) == 500.0
+    @test basal_velocity(rcm, 1.2e5) == 500.0
+
+    # Per-cell coefficient: each cell reads its own coefficient.
+    nx, ny = 12, 10
+    z_s = [100.0 * i for i in 1:nx, _ in 1:ny]
+    H = fill(500.0, nx, ny)
+    mask = trues(nx, ny)
+    βf = [i <= nx ÷ 2 ? 1.0e4 : 4.0e4 for i in 1:nx, _ in 1:ny]
+    gl = GlenRheology()
+    vf = diva_velocity(z_s, H, τ_b, mask, 1000.0, 1000.0; rheology = gl, sliding = WeertmanSliding(β = βf, m = 3.0))
+    for β in (1.0e4, 4.0e4)
+        v = diva_velocity(z_s, H, τ_b, mask, 1000.0, 1000.0; rheology = gl, sliding = WeertmanSliding(β = β, m = 3.0))
+        sel = βf .== β
+        @test vf.u_b[sel] == v.u_b[sel]
+    end
+    @test_throws DimensionMismatch diva_velocity(z_s, H, τ_b, mask, 1000.0, 1000.0; rheology = gl,
+                                                 sliding = LinearSliding(β = ones(3, 3)))
 end
 
 @testset "DIVA velocity and implied SMB (closure B)" begin
