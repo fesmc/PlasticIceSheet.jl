@@ -201,6 +201,24 @@ end
     @test d1 < 0.2 * f1
 end
 
+@testset "stress residual" begin
+    # Bed bump: :surface balances the stress far better than :flat (which ignores the bed).
+    n, dx = 40, 2000.0
+    xy = [((i - 0.5) * dx - 40.0e3, (j - 0.5) * dx - 40.0e3) for i in 1:n, j in 1:n]
+    z_b = [300 * exp(-(x^2 + y^2) / (2 * 2.0e4^2)) for (x, y) in xy]
+    m = [hypot(x, y) <= 30.0e3 for (x, y) in xy]
+    inner = [hypot(x, y) <= 20.0e3 for (x, y) in xy]
+    o = (; dx, dy = dx, max_sweeps = 1000, tol = 1e-10)
+    zs_s, _ = solve(z_b, 1.0e5, m; o...)
+    zs_f, _ = solve(z_b, 1.0e5, m; o..., mode = :flat)
+    rs = stress_residual(zs_s, z_b, 1.0e5, m; dx, dy = dx)
+    rf = stress_residual(zs_f, z_b, 1.0e5, m; dx, dy = dx)
+    @test all(iszero, rs[.!m])
+    med(v) = sort(v)[cld(length(v), 2)]
+    @test med(rs[inner]) < 0.1
+    @test med(rs[inner]) < med(rf[inner]) / 3
+end
+
 @testset "AD: ∂(volume)/∂τ_b via ForwardDiff matches finite difference" begin
     nx, ny = 36, 36
     dx = dy = 2000.0
