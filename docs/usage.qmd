@@ -9,111 +9,142 @@ using Pkg
 Pkg.add(url = "https://github.com/fesmc/PlasticIceSheet.jl")
 ```
 
-The core package depends only on `LinearAlgebra`. Reverse-mode differentiation and NetCDF
-I/O are loaded on demand through package extensions (below).
+The core package depends only on the standard libraries `LinearAlgebra` and `SparseArrays`.
+Reverse-mode differentiation and NetCDF I/O are loaded on demand through package extensions
+(below).
 
 ## Solving
 
 ```julia
 using PlasticIceSheet
 
-z_s, H = solve(z_b, τ_b, mask; dx, dy, mode = :full)
+z_s, H = solve(z_b, τ_b, mask; dx, dy)
 ```
 
 | argument | meaning |
 |---|---|
-| `z_b`  | bed elevation $z_b$ (m), `nx × ny` matrix |
-| `τ_b`    | basal shear stress (Pa); a scalar is broadcast to a uniform field |
+| `z_b` | bed elevation $z_b$ (m), `nx × ny` matrix |
+| `τ_b` | basal shear stress (Pa), scalar or field |
 | `mask` | `true` where grounded ice exists; the margin is the mask boundary |
 | `dx`, `dy` | grid spacings (m) |
 
-Key options (see the docstring for the rest):
+Returns `(z_s, H)`, the surface elevation and thickness. Ice-free cells have `H = 0` and
+`z_s = z_b`. Pad the mask with at least one ice-free cell, since an ice region without an
+ice-free cell is unreachable (it is returned with `H = 0` and a warning).
 
-- `mode` — `:full` (default, full Hamilton–Jacobi over arbitrary relief) or `:flat`
-  (flat-bed eikonal, cheapest; exact when relief ≪ thickness).
-- `params` — a `PlasticParams` (densities `ρ_i`/`ρ_w`, gravity `g`, sea level `z_ss`,
-  `H_min`).
-- `n_outer`, `outer_tol`, `relax` — `:full` damped fixed-point controls. `relax` ∈ (0,1] is
-  the under-relaxation factor (default 0.5); lower is more robust on steep beds but slower.
+Keyword options (see the `solve` docstring for the rest):
 
-Returns `(z_s, H)` — surface elevation $z_s$ and thickness $H$; ice-free cells have
-`H = 0`, `z_s = z_b`.
+- `mode`: `:surface` (default) solves the plastic surface equation directly over any bed
+  relief, in one sweep solve. `:flat` solves the flat-bed eikonal for $H^2$ and drapes it on
+  the bed; it is the cheapest mode and equals `:surface` on a flat bed. `:full` adds the bed
+  gradient to the $H^2$ equation by a damped fixed point (`n_outer`, `outer_tol`, `relax`);
+  it is kept for comparison and does not converge on rough real beds
+  ([Algorithms §3](algorithms.qmd#sec-full)).
+- `z_ss`: sea level (m), scalar or field. Marine margins are grounded at the flotation
+  thickness $(\rho_w/\rho_i)\max(z_{ss} - z_b, 0)$.
+- `margin`: where the margin lies between an ice cell and its ice-free neighbour. `:face`
+  (default) puts it on the cell face, `:centre` on the ice-free cell centre (the behaviour
+  before v0.2), and a field `margin_frac` ∈ [0, 1) gives its distance from the ice-free cell
+  centre as a fraction of the spacing ([Algorithms §6](algorithms.qmd#sec-margin)).
+- `params`: a `PlasticParams` with the densities `ρ_i`, `ρ_w`, gravity `g` and the
+  thickness floor `H_min`.
+
+A margin known as a signed distance (m, positive in the ice) converts to `margin_frac`:
+
+```julia
+frac = margin_frac_from_sdist(sdist, mask, dx, dy)
+z_s, H = solve(z_b, τ_b, mask; dx, dy, margin = frac)
+```
+
+On a 300 × 300 grid a `:surface` solve takes about 6 ms, `:flat` about 3 ms and a converging
+`:full` solve about 1 s.
 
 ### Diagnostics
 
 ```julia
-ice_volume(H, dx, dy)                # m³
-ice_area(mask, dx, dy)               # m²
-surface_misfit(z_s, z_s_obs, mask)   # mean-squared surface misfit over ice
+ice_volume(H, dx, dy)                          # m³
+ice_area(mask, dx, dy)                         # m²
+surface_misfit(z_s, z_s_obs, mask)             # mean-squared surface misfit over ice
+r = stress_residual(z_s, z_b, τ_b, mask; dx, dy)   # |ρ_i g H |∇z_s| − τ_b| / τ_b per cell
 ```
+
+`stress_residual` checks how well a geometry satisfies the plastic stress balance, in any mode.
+It is a cell-centred measure and is of order 1 at the first ice cell (the one-sided slope of
+a square-root profile), so read it away from the margin. On a 300 m bed bump the median over
+the interior is about 0.04 for `:surface` and 0.5 for `:flat`.
 
 ## Velocity and surface mass balance
 
-The plastic solve returns only geometry. A **DIVA closure** layered on the fixed geometry
-recovers a depth-averaged velocity and a first-order SMB — see
-[Algorithms §8](algorithms.qmd#sec-closures) for the theory. Pick a rheology and a sliding
-law:
+The plastic solve returns only geometry. A DIVA closure on the fixed geometry recovers a
+depth-averaged velocity and a first-order SMB ([Algorithms §8](algorithms.qmd#sec-closures)).
+Pick a rheology and a sliding law:
 
 ```julia
-rheology = GlenRheology(A = 1.0e-16, n = 3.0)           # isothermal Glen
-sliding  = WeertmanSliding(β = 1.0e4, m = 3.0)          # also LinearSliding(β),
-                                                        # RegularizedCoulomb(C, u_0, m)
+rheology = GlenRheology(A = 1.0e-16, n = 3.0)            # isothermal Glen, per year
+sliding  = WeertmanSliding(β = 1.0e4, m = 3.0)           # or LinearSliding(β),
+                                                         # RegularizedCoulomb(C, u_0, m; u_max)
 ```
 
-### Closure B — velocity, then implied SMB
+The coefficient (`β`, or `C` for `RegularizedCoulomb`) may be a field of the grid's shape.
+`RegularizedCoulomb` returns a `NaN` sliding speed where `τ_b ≥ C`, since the bed is at its
+Coulomb cap and the speed is undetermined. With a finite speed cap `u_max`, the speed is
+`min(u_b, u_max)` instead, and `u_max` at the cap.
+
+### Closure B: velocity, then implied SMB
 
 ```julia
 vel = diva_velocity(z_s, H, τ_b, mask, dx, dy; rheology, sliding)
 # named tuple: ux, uy, speed, u_b (sliding), u_def (deformation), ex, ey (flow direction)
 
-smb = smb_from_velocity(vel, H, z_s, mask, dx, dy)      # ḃ = ∇·(ūH)
+smb = smb_from_velocity(vel, H, z_s, mask, dx, dy)      # ḃ = ∇·(ūH), MFD operator
 ```
 
-`RegularizedCoulomb` returns a `NaN` basal speed wherever `τ_b ≥ C` (bed at the Coulomb
-cap, sliding speed undetermined) — those cells should take their speed from closure A.
-
-### Closure A — balance velocity from a prescribed SMB
+### Closure A: balance velocity from a prescribed SMB
 
 ```julia
 bal = balance_velocity(z_s, H, mask, smb, dx, dy)       # named tuple: speed, ux, uy, Q, ...
+ib  = implied_basal_velocity(z_s, H, τ_b, mask, smb, dx, dy; rheology)
+# ib.u_basal = u_balance − u_def: the basal velocity that geometry and SMB demand
 ```
 
-`balance_flux` (routing) is the exact inverse of `smb_from_velocity`, so feeding closure B's
-SMB back through closure A recovers closure B's velocity to machine precision.
-
-### Consistency — the implied bed
-
-```julia
-ib = implied_basal_velocity(z_s, H, τ_b, mask, smb, dx, dy; rheology)
-# u_basal = u_balance − u_def: the basal velocity the geometry + SMB demand
-```
-
-Inverting a sliding law at `ib.u_basal` and the local `τ_b` gives the friction implied by
-the reconstruction — a check on whether the geometry and assumed climate are consistent with
-a plausible bed.
+`balance_flux` is the exact inverse of `smb_from_velocity`, so routing closure B's SMB back
+through closure A recovers closure B's flux to machine precision.
 
 ### SMB-driven reconstruction
 
-The dual of `solve`: drive the geometry with an SMB instead of a yield stress, on the same
-fixed margin (see [Algorithms §9](algorithms.qmd#sec-reconstruct)).
+The dual of `solve` drives the geometry with an SMB (m ice yr⁻¹) instead of a yield stress,
+on the same fixed margin ([Algorithms §9](algorithms.qmd#sec-reconstruct)):
 
 ```julia
-z_s, H = diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding)
+z_s, H = diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding, z_ss)
 ```
 
-::: {.callout-warning}
-The outer iteration is non-contractive (like `:full`) and is under-relaxed; the default
-`relax = 0.05` converges the test configurations, but stiffer or finer grids need a smaller
-`relax` and more `n_outer`. A complete free-margin steady state is out of scope — use a
-dynamic model (e.g. [Yelmo](https://github.com/palma-ice/yelmo)) for that.
-:::
+The default `method = :steady` solves steady mass conservation $\nabla\cdot\mathbf q = \dot b$
+with $H \ge 0$ directly. Mask cells where ablation exceeds the inflow end ice-free. It stops
+when the residual falls below `res_tol` (m yr⁻¹) and warns otherwise. On Greenland at 16 km
+(`examples/reconstruct_greenland.jl`) it takes a few seconds.
+
+The implied SMB of this method for a given geometry, with the margin outflow and the surface
+velocity of the same closure, is:
+
+```julia
+o = smb_flux_divergence(z_b, H, mask, dx, dy; rheology, sliding, z_ss, τ_cap = τ_b)
+# named tuple: smb, q_land, q_marine (outflow per margin cell), us_x, us_y
+```
+
+The geometry `H` is a root of the steady problem forced by `o.smb`. `τ_cap` (optional) caps
+the driving stress of the fluxes, since a plastic bed carries at most its yield stress.
+
+`method = :routing` keeps the earlier iteration (route the SMB, invert the flux law for the
+driving stress, plastic sweep, under-relax). It is stable only for `relax` below roughly
+slope × Δx / H, i.e., 0.003–0.04 in tests, and is kept for comparison.
 
 ## Inverting for $\tau_b$
 
-The solver is differentiable with respect to $\tau_b$. See [Algorithms §7](algorithms.qmd#sec-ad)
-for the theory.
+The solver is differentiable with respect to $\tau_b$
+([Algorithms §7](algorithms.qmd#sec-ad)).
 
-### Forward mode — scalar / low-dimensional $\tau_b$
+### Forward mode: scalar or low-dimensional $\tau_b$
 
 ```julia
 using ForwardDiff
@@ -121,7 +152,7 @@ loss(τ_b) = surface_misfit(first(solve(z_b, τ_b, mask; dx, dy)), z_s_obs, mask
 g = ForwardDiff.derivative(loss, 1.0e5)
 ```
 
-### Reverse mode — full per-cell $\tau_b$ field
+### Reverse mode: a full per-cell $\tau_b$ field
 
 Load the extension triggers, then differentiate `differentiable_thickness` with any
 reverse-mode AD:
@@ -130,34 +161,16 @@ reverse-mode AD:
 using ImplicitDifferentiation, ADTypes, ForwardDiff, Zygote
 
 loss(τ_b) = surface_misfit(differentiable_thickness(τ_b, z_b, mask; dx, dy) .+ z_b, z_s_obs, mask)
-g = Zygote.gradient(loss, τ_b)[1]      # gradient w.r.t. the whole τ_b field
+g = Zygote.gradient(loss, τ_b)[1]      # gradient with respect to the whole τ_b field
 ```
 
-A complete, runnable Adam-based recovery of a spatially-varying $\tau_b$ from an observed
-surface is in
-[`examples/invert_tau.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl).
-It drives the misfit down by four orders of magnitude and recovers the two-region truth to
-within a fraction of a kPa.
+`differentiable_thickness` takes the same `mode`, `z_ss` and `margin` keywords as `solve`.
+The default reverse-mode linear solver is direct, which is robust for modest grids. For very
+large fields, pass an iterative solver (see the `differentiable_thickness` docstring).
 
-### Choosing a parameterization
-
-How you parameterize $\tau_b$ — a regularized per-cell field, or a few bed-derived tiles —
-matters as much as the gradient. The real-data Greenland example
-[`examples/invert_taub_greenland.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_taub_greenland.jl)
-implements both and switches with one env var:
-
-```bash
-julia --project=examples examples/invert_taub_greenland.jl                  # tiled (default)
-METHOD=percell julia --project=examples examples/invert_taub_greenland.jl   # point-by-point
-```
-
-See [Inversion](inversion.qmd) for the parameterizations, the link to ICESHEET's hand-tuned
-shear-stress domains, and a resolution test for the number of tiles.
-
-::: {.callout-tip}
-The default reverse-mode linear solver is direct (robust for modest grids). For very large
-fields, pass an iterative solver — see the `differentiable_thickness` docstring.
-:::
+[`examples/invert_tau.jl`](https://github.com/fesmc/PlasticIceSheet.jl/blob/main/examples/invert_tau.jl)
+recovers a spatially varying $\tau_b$ from an observed surface with Adam, and
+[Inversion](inversion.qmd) covers the parameterizations of $\tau_b$ on real data.
 
 ## NetCDF I/O
 
@@ -169,12 +182,36 @@ z_s, H = solve(inp.z_b, inp.τ_b, inp.mask; inp.dx, inp.dy)
 save_reconstruction("out.nc", z_s, H; x = inp.x, y = inp.y)
 ```
 
+## Examples
+
+The scripts in
+[`examples/`](https://github.com/fesmc/PlasticIceSheet.jl/tree/main/examples) run with
+`julia --project=examples examples/<script>.jl`. The Greenland scripts read the GRL-16KM or
+GRL-32KM grids from an `examples/ice_data` directory (not included).
+
+| script | content |
+|---|---|
+| `invert_tau.jl` | synthetic per-cell $\tau_b$ recovery with Adam (reverse mode) |
+| `invert_taub_greenland.jl` | $\tau_b$ inversion on Greenland, tiled or per-cell (`METHOD`) |
+| `invert_taub_sweep_greenland.jl` | rmse against the number of tiles |
+| `smb_from_velocity_greenland.jl` | implied SMB from observed velocity and thickness, against the climate SMB |
+| `reconstruct_greenland.jl` | SMB-driven reconstruction from the MAR SMB, with balance velocity |
+
 ## Caveats
 
-- Steady-state geometry only — biased thick/peaked where the real ice was streaming or
-  dynamic (low effective driving stress the plastic assumption cannot see).
-- $\tau_b$ carries essentially all the uncertainty. For a first guess a constant
-  (~50–100 kPa) or a bed-keyed value is fine; do not over-interpret the result as a
-  constrained reconstruction.
-- Very steep beds (relief approaching the ice thickness over a few cells) may not converge
-  in `:full` — see [Algorithms §3](algorithms.qmd#sec-full).
+- The geometry is steady state only. It is biased thick where the real ice was streaming
+  or otherwise dynamic, since the plastic assumption sees no reduced driving stress there.
+- $\tau_b$ carries essentially all of the uncertainty. For a first guess a constant
+  (about 50–100 kPa) or a bed-keyed value is reasonable, but the result is not a constrained
+  reconstruction.
+- `:surface` and `:flat` are first-order accurate. At 10–30 km the margin position and
+  the coarse inputs change the ice volume by several percent
+  ([Algorithms §6](algorithms.qmd#sec-margin)).
+
+## Fortran library
+
+[PlasticIceSheet](https://github.com/fesmc/PlasticIceSheet) is a dependency-free Fortran
+port of the forward solver and the closures (`libplastic.a`), for coupling into Fortran
+models. It uses the same schemes (results were verified bit-identical against v0.1) and adds
+a warm start, OpenMP parallelism and a joint inversion of speed and SMB. The $\tau_b$
+inversion and the AD extension remain Julia-only.

@@ -3,52 +3,49 @@ title: "PlasticIceSheet.jl"
 subtitle: "Fast, AD-friendly perfectly-plastic ice-sheet reconstruction"
 ---
 
-`PlasticIceSheet.jl` reconstructs a perfectly-plastic, steady-state ice sheet from three
-inputs — a grounded-ice **margin/mask**, a **bed elevation** $z_b$, and a **basal shear
-stress** field $\tau_b$ — and returns a glaciologically plausible ice **surface** $z_s$ and
-**thickness** $H$. There is no time-stepping, no climate, and no ice dynamics.
+`PlasticIceSheet.jl` reconstructs a perfectly plastic, steady-state ice sheet from three
+inputs: a grounded-ice **mask**, a **bed elevation** $z_b$ and a **basal shear stress**
+$\tau_b$. It returns the ice **surface** $z_s$ and **thickness** $H$, with no time stepping,
+no climate and no ice dynamics.
 
-It is a clean-room simplification and modernization of **ICESHEET 2.0** by Evan Gowan and
-colleagues — [source code](https://github.com/evangowan/icesheet), the method's
-description paper
-([Gowan et al., 2016, *Geosci. Model Dev.*](https://doi.org/10.5194/gmd-9-1673-2016)),
-and its global application to the past 80,000 years
-([Gowan et al., 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)).
-The core physics — a single published equation — is retained, while ICESHEET's recursive
-flowline / crossover / saddle machinery is replaced by a grid eikonal solver (see
-[Origin](#origin)).
+It is a simplification and modernization of ICESHEET 2.0 by Evan Gowan and colleagues
+([source code](https://github.com/evangowan/icesheet);
+[Gowan et al., 2016, *Geosci. Model Dev.*](https://doi.org/10.5194/gmd-9-1673-2016);
+[Gowan et al., 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)). The core
+physics, one published equation, is retained. The recursive flowline, crossover and saddle
+machinery of ICESHEET (about 2,600 lines) is replaced by a grid solver of a few hundred lines
+([Algorithms §10](algorithms.qmd#sec-dropped)).
 
-It is meant as a *complementary first-guess tool* next to a full dynamic model (e.g.
-[Yelmo](https://github.com/palma-ice/yelmo)) and an independent GIA / sea-level solver: to
-seed a spin-up, force a surface-mass-balance model, or serve as a relaxation target.
+The package is meant as a first-guess tool next to a dynamic ice-sheet model (e.g.,
+[Yelmo](https://github.com/palma-ice/yelmo)) and an independent GIA and sea-level solver.
+Typical uses are to initialize a spin-up, to provide a surface for an SMB model, or to serve as
+a relaxation target.
 
 ## The idea
 
-Under a perfectly-plastic, steady-state assumption, the **basal shear stress** $\tau_b$
-balances the gravitational **driving stress** $\tau_d$ everywhere:
+Under the perfectly plastic, steady-state assumption the basal shear stress balances the
+gravitational driving stress, which is set by the geometry:
 
 $$
-\tau_b = \tau_d .
+\tau_b = \tau_d = \rho_i\, g\, H\, |\nabla z_s| .
 $$
 
-The driving stress is fixed by the ice geometry — for surface elevation $z_s$, bed
-elevation $z_b$, and thickness $H = z_s - z_b$, $\tau_d = \rho_i\, g\, H\, |\nabla z_s|$ —
-so the prescribed $\tau_b$ relates to the surface as $\tau_b = \rho_i\, g\, H\, |\nabla z_s|$.
-Rearranging for the surface slope gives the equation we solve:
+Rearranging for the surface slope gives the equation we solve,
 
 $$
-|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
+|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} ,
 $$
 
-This is a static **Hamilton–Jacobi (eikonal) equation**. Solving it with an upwind grid
-scheme means saddles, domes, and coalescing ice caps emerge automatically from the
-viscosity solution — there is no flowline tracing, crossover detection, or saddle
-bookkeeping. See [Algorithms](algorithms.qmd) for the full derivation and numerics.
+a static Hamilton–Jacobi equation. It is discretized with a monotone upwind scheme and
+solved by fast sweeping in one pass over the grid, bed relief included. Saddles, domes and
+coalescing ice caps follow from the upwind (viscosity) solution without flowline tracing or
+saddle detection ([Algorithms §1–6](algorithms.qmd)).
 
-An optional **DIVA closure** layered on the fixed geometry recovers what perfect plasticity
-discards — a depth-averaged velocity and a first-order surface mass balance — and its dual
-can drive the geometry *from* an SMB instead of a yield stress
-([Algorithms §8–9](algorithms.qmd#sec-closures)).
+Two extensions build on the fixed geometry. A DIVA closure recovers what perfect plasticity
+discards, a depth-averaged velocity and a first-order surface mass balance
+([§8](algorithms.qmd#sec-closures)). The same flux law then drives the geometry *from* an
+SMB instead of a yield stress, by solving steady mass conservation on the prescribed margin
+([§9](algorithms.qmd#sec-reconstruct)).
 
 ## Quick start
 
@@ -56,25 +53,17 @@ can drive the geometry *from* an SMB instead of a yield stress
 using PlasticIceSheet
 
 nx, ny = 100, 100
-dx = dy = 2000.0                                   # grid spacing (m)
-bed  = zeros(nx, ny)                               # bed elevation B (m)
-mask = [hypot(i-50.5, j-50.5) <= 40 for i in 1:nx, j in 1:ny]
-τ_b    = 1.0e5                                       # basal shear stress (Pa)
+dx = dy = 2000.0                                       # grid spacing (m)
+z_b  = zeros(nx, ny)                                   # bed elevation (m)
+mask = [hypot(i - 50.5, j - 50.5) <= 40 for i in 1:nx, j in 1:ny]
+τ_b  = 1.0e5                                           # basal shear stress (Pa)
 
-E, H = solve(bed, τ_b, mask; dx, dy, mode = :full)     # :full (default) or :flat
+z_s, H = solve(z_b, τ_b, mask; dx, dy)                 # mode = :surface (default)
 ```
 
-A full Hamilton–Jacobi solve on a 300×300 grid takes ~0.1 s. The basal shear stress
-$\tau_b$ is differentiable, enabling gradient-based [inversion](usage.qmd#inverting-for).
+A solve on a 300 × 300 grid takes a few milliseconds. The result is differentiable with
+respect to $\tau_b$, which enables gradient-based [inversion](inversion.qmd). See
+[Usage](usage.qmd) for the options, the closures and the examples.
 
-## Origin
-
-This is a clean-room simplification and modernization of
-**[ICESHEET 2.0](https://github.com/evangowan/icesheet)**
-([Gowan et al. 2016, *GMD*](https://doi.org/10.5194/gmd-9-1673-2016);
-[Gowan et al. 2021, *Nat. Commun.*](https://doi.org/10.1038/s41467-021-21469-w)). The core
-physics — one published equation — is retained; the ~2,600-line recursive flowline /
-crossover / saddle machinery is replaced by a grid eikonal solver on the order of a couple
-hundred lines. [Algorithms §10](algorithms.qmd#sec-dropped) lists what was dropped.
-
-`PlasticIceSheet.jl` is MIT-licensed.
+`PlasticIceSheet.jl` is MIT-licensed. A dependency-free Fortran port for coupling into
+Fortran models is available as [PlasticIceSheet](https://github.com/fesmc/PlasticIceSheet).

@@ -2,9 +2,10 @@
 title: "Algorithms"
 ---
 
-This page explains, end to end, how `PlasticIceSheet.jl` turns a margin, a bed, and a
-basal-shear-stress field into an ice sheet — and how it differentiates the result with
-respect to the shear stress.
+This page describes how `PlasticIceSheet.jl` turns a margin, a bed and a basal shear stress
+into an ice sheet, how it differentiates the result with respect to the shear stress, and
+how the same discretization supports velocity, surface-mass-balance and SMB-driven
+reconstructions.
 
 ## Notation
 
@@ -14,356 +15,362 @@ respect to the shear stress.
 | $z_b$ | `z_b` | **bed** elevation (m) |
 | $H = z_s - z_b$ | `H` | ice **thickness** (m) |
 | $\tau_b$ | `τ_b` | basal **shear stress** (Pa) |
-| $\tau_d$ | — | gravitational **driving stress** (Pa) |
-| $z_{ss}$ | `z_ss` | sea-surface elevation, i.e. sea level (m) |
+| $\tau_d$ | `τ_d` | gravitational **driving stress** (Pa) |
+| $z_{ss}$ | `z_ss` | sea-surface elevation, i.e., sea level (m), scalar or field |
 | $H_{flt}$ | — | marine **flotation** thickness (m) |
-| $\rho_i,\ \rho_w$ | `ρ_i, ρ_w` | ice / sea-water density (kg m⁻³) |
+| $\rho_i,\ \rho_w$ | `ρ_i`, `ρ_w` | ice / sea-water density (kg m⁻³) |
 | $g$ | `g` | gravitational acceleration (m s⁻²) |
-| $w \equiv H^2$ | `w` | the solver's working variable (m²) |
-| $G \equiv 2\tau_b/(\rho_i g)$ | — | flat-bed eikonal right-hand side (m) |
-| $\bar{\mathbf u}$ | `ū` | depth-averaged horizontal velocity (m yr⁻¹) |
-| $u_b,\ u_d$ | `u_b, u_def` | basal-sliding / internal-deformation speed |
-| $A,\ n$ | `A, n` | Glen rate factor / exponent |
-| $\beta$ | `β` | sliding-law coefficient |
-| $\dot b$ | `smb` | surface mass balance (m yr⁻¹) |
-| $\mathbf q = \bar{\mathbf u} H$ | `Q` | vertically-integrated ice flux |
+| $k \equiv \tau_b/(\rho_i g)$ | — | plastic length scale (m) |
+| $w \equiv H^2$ | `w` | working variable of `:flat` and `:full` (m²) |
+| $f$ | `margin_frac` | margin position from an ice-free cell centre, as a fraction of the spacing |
+| $u_b,\ u_d$ | `u_b`, `u_def` | basal-sliding / internal-deformation speed (m yr⁻¹) |
+| $A,\ n$ | `A`, `n` | Glen rate factor / exponent |
+| $\beta,\ C$ | `β`, `C` | sliding-law coefficient (scalar or field) |
+| $\dot b$ | `smb` | surface mass balance (m ice yr⁻¹) |
+| $\mathbf q = \bar{\mathbf u} H$ | `qx`, `qy` | vertically integrated ice flux (m² yr⁻¹) |
+| $Q$ | `Q` | routed throughput of a cell (m³ yr⁻¹) |
 
 ## 1. The governing equation
 
-The reconstruction assumes **perfectly plastic, steady-state** ice. In that limit the
-basal shear stress $\tau_b$ exactly balances the gravitational driving stress $\tau_d$:
+The reconstruction assumes perfectly plastic, steady-state ice. In that limit the basal shear
+stress balances the gravitational driving stress,
 
 $$
-\tau_b = \tau_d .
-$$ {#eq-balance}
-
-The driving stress is set by the ice geometry — for an ice surface elevation $z_s$, bed
-elevation $z_b$, and thickness $H = z_s - z_b$, with $\rho_i$ the ice density and $g$
-gravity:
-
-$$
-\tau_d = \rho_i\, g\, H\, |\nabla z_s| .
-$$ {#eq-driving}
-
-Combining @eq-balance and @eq-driving relates the prescribed basal shear stress to the
-surface geometry:
-
-$$
-\tau_b = \rho_i\, g\, H\, |\nabla z_s| .
+\tau_b = \tau_d = \rho_i\, g\, H\, |\nabla z_s| ,
 $$ {#eq-plastic-stress}
 
-In a reconstruction $\tau_b$ is *prescribed* (it is the field we choose or invert for) and
-the surface $z_s$ is the unknown. Rearranging for the surface slope gives the equation we
-actually solve:
+where the driving stress is set by the ice geometry. In a reconstruction $\tau_b$ is
+prescribed (it is the field we choose or invert for) and the surface is the unknown.
+Rearranging for the surface slope gives the equation we solve:
 
 $$
-|\nabla z_s| = \frac{\tau_b}{\rho_i\, g\, H} = \frac{\tau_b}{\rho_i\, g\, (z_s - z_b)} .
+|\nabla z_s| = \frac{k}{H} = \frac{k}{z_s - z_b}, \qquad k = \frac{\tau_b}{\rho_i\, g} .
 $$ {#eq-plastic}
 
-The right-hand side is a slope (dimensionless). @eq-plastic is a static **Hamilton–Jacobi
-equation**: the surface is built inward from the margin, where $H \to 0$. Its upwind
-(viscosity) solution automatically yields the correct envelope wherever ice converges, so
-ice divides, domes, and merging ice caps appear without any explicit flowline or saddle
-handling.
+@eq-plastic is a static Hamilton–Jacobi equation. The surface is built inward from the
+margin, where $H \to 0$, and its upwind (viscosity) solution yields the correct envelope
+wherever ice from different margins meets. Ice divides, domes and merging ice caps therefore
+appear without any flowline or saddle handling. This is the physics of ICESHEET 2.0
+(Gowan et al., 2016), solved on a grid rather than by tracing characteristics.
 
-This is the same physics as ICESHEET 2.0, but solved on a grid rather than by tracing
-characteristics.
+Three solver modes discretize @eq-plastic. `:surface` (the default) solves it for $z_s$
+directly (§2). `:flat` and `:full` solve it for $w = H^2$ (§3). The former is exact on a
+flat bed and the latter adds the bed gradient through an outer fixed point.
 
-## 2. Solve for $H^2$, not $z_s$
+## 2. `:surface` mode {#sec-surface}
 
-Near the margin $H \to 0$, so the driving slope $\tau_b/(\rho_i g H)$ in @eq-plastic
-**diverges**. Discretising @eq-plastic for $z_s$ directly is therefore inaccurate near the
-margin and biases the whole reconstruction thin. The fix is a change of variable.
+`:surface` solves @eq-plastic for $u = z_s$ in one fast-sweeping solve, with no outer
+iteration. Its Hamiltonian, $|p| - k/(u - z_b)$, increases with $u$, since the right-hand side
+depends on $z_s$ only through the thickness of the cell itself. The equation is therefore
+proper, and a monotone upwind scheme converges to its viscosity solution by fast sweeping
+(§5).
 
-On a flat bed, @eq-plastic reads $|\nabla H| = \tau_b/(\rho_i g H)$. Multiplying by $2H$ and
-using $\nabla(H^2) = 2H\,\nabla H$,
+The discretization integrates the margin singularity. A cell-centred form,
+$(u-a)_+^2/\Delta x^2 + \ldots = (k/(u - z_b))^2$, is also monotone but inaccurate at the
+margin: on a flat bed its first ice cell is $\sqrt{k\,\Delta x}$ thick instead of the Nye
+value $\sqrt{2k\,\Delta x}$ (about 29 % low at every resolution). We therefore take each axis
+difference times the **edge-mean thickness**, with the neighbour thickness measured from the
+bed of the cell:
 
 $$
-\bigl|\nabla (H^2)\bigr| = \frac{2\tau_b}{\rho_i\, g}.
+P_a(H) = \frac{(H - \alpha)_+ \,(H + \alpha_+)}{2}, \quad \alpha = a - z_b, \qquad
+\left(\frac{P_a(H)}{\Delta x}\right)^{2} + \left(\frac{P_b(H)}{\Delta y}\right)^{2} = k^2 ,
+$$ {#eq-surface-update}
+
+where $a$ and $b$ are the upwind (smaller) neighbour surfaces along $x$ and $y$, and
+$\alpha_+ = \max(\alpha, 0)$. $P_a$ increases with $H$ and does not increase with $a$, so the
+scheme is proper and monotone. Where both neighbour surfaces stand above the bed of the cell,
+@eq-surface-update is the $w$-eikonal of §3 with $w_a = \alpha^2$ and has a closed-form
+root. Otherwise the root is found by Newton iteration from the smaller one-sided root, which
+decreases monotonically to the solution since $P^2$ is convex there. This is
+`godunov_surface`.
+
+On a flat bed `:surface` is identical to `:flat`, including the exact 1-D Nye profile. Over
+bed relief it converges at first order: for a 1-D bed with slope $5\times10^{-3}$, the
+maximum error against an ODE reference halves with each halving of $\Delta x$ (about 1 m at
+$\Delta x$ = 500 m), while `:flat` is off by about 300 m. On real beds at 32 km (GRL-32KM and
+NH-32KM) it converges in about 10 sweeps, while the `:full` fixed point does not converge
+for any relaxation tested (§3). These real-data results come from the Fortran port of the
+package, which uses the same scheme. For these reasons `:surface` is the default.
+
+## 3. `:flat` and `:full` modes: solving for $H^2$ {#sec-full}
+
+On a flat bed, multiplying @eq-plastic by $2H$ and using $\nabla(H^2) = 2H\nabla H$ gives a
+plain eikonal for $w = H^2$,
+
+$$
+\bigl|\nabla w\bigr| = G, \qquad G = \frac{2\tau_b}{\rho_i\, g} = 2k ,
 $$ {#eq-flat}
 
-The singularity is gone: the working variable $w \equiv H^2$ satisfies a **plain eikonal**
-$|\nabla w| = G$ with a finite right-hand side $G = 2\tau_b/(\rho_i g)$, and the boundary
-condition $w = 0$ at the margin is regular. Both solver modes work in $w = H^2$; the
-thickness is recovered as $H = \sqrt{w}$ and the surface as $z_s = H + z_b$.
+with a finite right-hand side and the regular margin condition $w = H_{flt}^2$. `:flat`
+solves @eq-flat and drapes the thickness on the bed ($z_s = z_b + \sqrt{w}$). It is the
+cheapest mode and exact when bed relief is small compared with the ice thickness. Over
+relief, however, the surface follows the bed, which biases the thickness by a few hundred
+metres at 32 km on Greenland.
 
-### `:flat` mode
-
-`:flat` solves @eq-flat exactly and drapes the result on the bed. It is the cheapest mode
-and is appropriate whenever bed relief is small compared with ice thickness (continental
-interiors). ICESHEET's own sensitivity tests indicate the bed-gradient terms are
-second-order except in mountainous terrain.
-
-## 3. `:full` mode — the bed-gradient correction {#sec-full}
-
-Over significant relief the bed slope $\nabla z_b$ enters the flux. Writing
-$\nabla z_s = \nabla H + \nabla z_b$ in @eq-plastic and carrying the algebra through in the
-$w = H^2$ variable gives, **exactly in one dimension**,
+`:full` adds the bed gradient. Writing $\nabla z_s = \nabla H + \nabla z_b$ in @eq-plastic
+gives, exactly in one dimension,
 
 $$
-|\nabla w| = \sqrt{\,G^2 \;-\; 4\sqrt{w}\,(\nabla z_b \cdot \nabla w)\;-\;4\,w\,|\nabla z_b|^2\,},
-\qquad G = \frac{2\tau_b}{\rho_i g}.
+|\nabla w| = \sqrt{\,G^2 - 4\sqrt{w}\,(\nabla z_b \cdot \nabla w) - 4\,w\,|\nabla z_b|^2\,} ,
 $$ {#eq-hj}
 
-Two properties make @eq-hj the right object to solve:
-
-- when $\nabla z_b = 0$ it reduces to the flat eikonal @eq-flat, so `:full` and `:flat` agree
-  exactly on a flat bed;
-- it is written in $w = H^2$, so it inherits the regular margin behaviour of @eq-flat.
-
-The effective right-hand side depends on $\nabla w$ (through the $\nabla z_b\cdot\nabla w$
-term), so @eq-hj is not a pure eikonal. It is solved by an **outer fixed-point iteration**:
-freeze the right-hand side from the current $w$, solve the resulting constant-RHS eikonal
-for a candidate $w_c$, and update.
-
-### Damping is required
-
-The naive update $w \leftarrow \text{Eikonal}\!\left(\text{RHS}(w)\right)$ is **not
-contractive** — over real bed relief it oscillates indefinitely. The solver therefore uses
-an **under-relaxed (damped) Picard iteration**,
-
-$$
-w^{(k+1)} = (1-\alpha)\, w^{(k)} + \alpha\, \text{Eikonal}\!\left(\text{RHS}(w^{(k)})\right),
-$$
-
-with relaxation factor $\alpha = \texttt{relax}$ (default $0.5$). Damping converges the
-iteration to the same fixed point — i.e. to a vanishing residual (§6) — which is also what
-makes the implicit-differentiation gradient (§7) exact. Smaller $\alpha$ is more robust on
-steep beds but needs more iterations; beds whose relief approaches the ice thickness over a
-few cells may not converge at all (lower `relax`, raise `n_outer`, refine the grid, or fall
-back to `:flat`).
+which reduces to @eq-flat on a flat bed. The right-hand side depends on $\nabla w$, so
+@eq-hj is solved by a damped (under-relaxed) Picard iteration: freeze the right-hand side
+from the current $w$, solve the eikonal for a candidate $w_c$, and update
+$w \leftarrow (1-\alpha)\,w + \alpha\,w_c$ with $\alpha$ = `relax`. The Hamiltonian of
+@eq-hj is increasing in $w$ only where $\nabla z_s \cdot \nabla z_b > 0$, i.e., not on
+reverse bed slopes, and the lagged central-difference bed term makes the map non-contractive.
+On smooth synthetic relief the damped iteration converges. On GRL-32KM and NH-32KM, in
+contrast, it oscillates globally for every relaxation tested (0.4 to 0.02, 2000 iterations).
+`:full` is therefore kept for comparison with earlier results only.
 
 ## 4. The Godunov update
 
-The eikonal $|\nabla u| = F$ is discretised cell-by-cell with the first-order **Godunov
-upwind scheme**. At a cell with grid spacings $\Delta x, \Delta y$, let $a$ and $b$ be the
-smaller of the two neighbour values along each axis:
+The eikonal $|\nabla u| = F$ of `:flat` and `:full` is discretized cell by cell with the
+first-order Godunov upwind scheme. With $a$ and $b$ the smaller neighbour values along each
+axis,
 
 $$
-a = \min(u_{i-1,j},\, u_{i+1,j}), \qquad b = \min(u_{i,j-1},\, u_{i,j+1}).
+a = \min(u_{i-1,j},\, u_{i+1,j}), \qquad b = \min(u_{i,j-1},\, u_{i,j+1}),
 $$
 
-The updated value is the smallest $u$ satisfying
+the update is the smallest $u$ satisfying
 
 $$
-\left(\frac{(u-a)_+}{\Delta x}\right)^{2} + \left(\frac{(u-b)_+}{\Delta y}\right)^{2} = F^2,
-\qquad (\cdot)_+ = \max(\cdot, 0).
+\left(\frac{(u-a)_+}{\Delta x}\right)^{2} + \left(\frac{(u-b)_+}{\Delta y}\right)^{2} = F^2 .
 $$
 
-In practice: try the two-sided quadratic; accept it only if the result exceeds both
-neighbours (both upwind terms active); otherwise take the smaller one-sided update
-$\min(a + F\,\Delta x,\; b + F\,\Delta y)$. This is `godunov_eikonal`, a pure function with
-no mutation or indexing — which is what lets the autodiff back ends differentiate it
-directly.
+The two-sided root is accepted if it exceeds both neighbours, and otherwise the smaller
+one-sided update $\min(a + F\,\Delta x,\; b + F\,\Delta y)$ applies. This is
+`godunov_eikonal`. Both kernels are pure functions without mutation or indexing, which lets
+the AD back ends differentiate them directly.
+
+Where an ice-free neighbour lies closer than a full spacing (a sub-cell margin, §6), the two
+sides of an axis have different spacings. The upwind term of that axis is then the maximum
+over the sides of $(u - a_s)_+/d_s$, and the update is the minimum over the side
+combinations. Each candidate is monotone, so the minimum is too.
 
 ## 5. Fast sweeping
 
-The discrete eikonal is solved by the **fast-sweeping method**: Gauss–Seidel updates that
-keep the monotone minimum,
+The discrete equations are solved by the fast-sweeping method: Gauss–Seidel updates that
+keep the monotone minimum, $u_{i,j} \leftarrow \min(u_{i,j},\ \text{update})$, over the four
+diagonal traversal orderings in rotation. Each ordering follows the characteristics of one
+quadrant of directions, so a few sweeps converge the whole field in $O(N)$ work. Ice cells
+start at $+\infty$ and ice-free cells hold their boundary value (§6). An ice region with no
+ice-free cell is never reached; its cells are returned with $H = 0$ and a warning.
+
+## 6. Boundary conditions and margin position {#sec-margin}
+
+Ice-free cells carry the Dirichlet value of the margin. On land ($z_b \ge z_{ss}$) the margin
+thickness is zero. At a marine margin ($z_b < z_{ss}$) the grounding line sits at the
+flotation thickness,
 
 $$
-u_{i,j} \leftarrow \min\!\bigl(u_{i,j},\; \text{Godunov update}\bigr),
+H_{flt} = \frac{\rho_w}{\rho_i}\,\max(z_{ss} - z_b,\, 0),
 $$
 
-applied over the four diagonal traversal orderings $(\nearrow, \nwarrow, \swarrow,
-\searrow)$ in rotation. Because each ordering captures characteristics flowing in one
-quadrant of directions, a handful of sweeps converges the whole field in $O(N)$ work, for
-any geometry. Interior cells start at $+\infty$; ice-free cells hold their boundary value
-(§6) so neighbour look-ups only ever read the working array.
+which reproduces the marine treatment of ICESHEET. Sea level `z_ss` is an input like the bed
+and may be a field. The margin value is $z_b + H_{flt}$ in `:surface` and $H_{flt}^2$ in
+`:flat` and `:full`.
 
-## 6. Boundary conditions
+The margin lies between an ice cell and its ice-free neighbour. The `margin` keyword sets
+where: the ice-free neighbour enters the update at $(1 - f)\,\Delta x$ from the ice-cell
+centre, with $f = 1/2$ for `:face` (the default; margin on the cell face), $f = 0$ for
+`:centre` (margin on the ice-free cell centre, the behaviour before v0.2), or a field
+$f \in [0, 1)$ on the ice-free cells. A margin closer than 1 % of a spacing to an ice-cell
+centre counts as at 1 %, which keeps the update well conditioned. For a margin given as a
+signed distance (positive in the ice), `margin_frac_from_sdist` returns
+$f = -s_{dist}/\sqrt{\Delta x\,\Delta y}$ on the ice-free cells next to the ice. This value is
+isotropic and thus exact for margins along a grid axis.
 
-The margin is the interface between mask (grounded ice) and ice-free cells. Ice-free cells
-carry the Dirichlet value:
+The margin position matters at coarse resolution. For a circular cap of radius 30 km on a
+flat bed (centre off the grid), the volume error relative to the exact solution is:
 
-- **Land margin** ($z_b \ge z_{ss}$): $H = 0$, i.e. $w = 0$.
-- **Marine margin** ($z_b < z_{ss}$, with $z_{ss}$ the sea-surface elevation): the
-  grounding line sits at the **flotation thickness** $H_{flt}$ — the thickness whose weight
-  balances the local water column,
-  $$
-  H_{flt} = \frac{\rho_w}{\rho_i}\,\bigl(z_{ss} - z_b\bigr), \qquad w = H_{flt}^2,
-  $$
-  reproducing ICESHEET's marine grounding-line treatment. The eikonal then grows the ice
-  inward from that thickness. No separate slope-limiting pre-pass is needed: the maximum
-  surface slope *is* the plastic constraint the eikonal enforces.
+| $\Delta x$ | `:centre` | `:face` | signed distance |
+|---|---|---|---|
+| 4 km | +7.6 % | −3.4 % | −0.7 % |
+| 2 km | +4.7 % | −1.4 % | −0.3 % |
+| 1 km | +2.6 % | −0.6 % | −0.1 % |
+| 500 m | +1.2 % | −0.5 % | −0.1 % |
+
+`:centre` places the margin a half cell too far out on average and overestimates the volume.
+`:face` has the opposite sign, since a staircase margin does not lie on average at the
+face. The signed distance is the most faithful margin when it is known. Against ICESHEET
+output for North America at 20 kyr ago and Greenland at present day, regridded from 5 km to
+10–30 km, the margin position accounts for 0.4–5 percentage points of the volume excess of
+the coarse solution (Fortran port, same scheme).
 
 ## 7. Differentiating with respect to $\tau_b$ {#sec-ad}
 
-Because the solver is a pure function of $\tau_b$, an objective on the output (a misfit to an
-observed surface, a target volume, …) is differentiable — enabling **basal-shear-stress
-inversion**.
-
-### Forward mode
+The solver is a pure function of $\tau_b$, so any objective on the output (a misfit to an
+observed surface, a target volume) is differentiable. This enables basal-shear-stress
+inversion ([Inversion](inversion.qmd)).
 
 For a scalar $\tau_b$ or a low-dimensional parameterization, `ForwardDiff` differentiates
-straight through `solve`. Cost scales with the number of parameters.
+through `solve`. The cost scales with the number of parameters.
 
-### Reverse mode (implicit differentiation)
-
-For a full per-cell $\tau_b$ field, differentiating through the sweeps would be wasteful.
-Instead, the converged field satisfies an **optimality condition** — the Godunov residual
+For a full per-cell field, the converged working field $u$ ($z_s$ or $w$) instead satisfies
+the Godunov residual
 
 $$
-r_{i,j}(w, \tau_b) = w_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
+r_{i,j}(u, \tau_b) = u_{i,j} - \bigl(\text{Godunov update at } (i,j)\bigr) = 0
 $$
 
-on ice cells (and $w - \text{bc} = 0$ off-ice). By the implicit function theorem, for a
-loss $L(w)$,
+on ice cells (and $u - \text{bc} = 0$ elsewhere). By the implicit function theorem, for a loss
+$L(u)$,
 
 $$
 \frac{\partial L}{\partial \tau_b}
-= -\,\frac{\partial L}{\partial w}\left(\frac{\partial r}{\partial w}\right)^{-1}\frac{\partial r}{\partial \tau_b},
+= -\,\frac{\partial L}{\partial u}\left(\frac{\partial r}{\partial u}\right)^{-1}\frac{\partial r}{\partial \tau_b},
 $$
 
-so the gradient costs a single linear solve with the residual Jacobian, **independent of
-the number of sweeps or outer iterations** and scalable to a full field. The forward fast
-sweep is treated as a black box; only the residual is differentiated (with `ForwardDiff`
-internally). This is wired up with
+so the gradient costs one linear solve with the residual Jacobian, independent of the number
+of sweeps or outer iterations. Only the residual is differentiated (with `ForwardDiff`). This
+is wired up with
 [`ImplicitDifferentiation.jl`](https://github.com/JuliaDecisionFocusedLearning/ImplicitDifferentiation.jl)
-in a package extension, so any reverse-mode AD (e.g. Zygote) obtains the gradient.
-
-The `:flat` gradient is exact to machine precision; the `:full` gradient is exact once the
-damped forward solve (§3) has driven the residual to $\approx 0$.
+in a package extension, so any reverse-mode AD (e.g., Zygote) obtains the gradient through
+`differentiable_thickness`. The `:surface` and `:flat` gradients agree with forward mode to
+machine precision. The `:full` gradient is exact only where the damped forward solve has
+driven the residual to zero.
 
 ::: {.callout-note}
 ## NaN hygiene
-$\sqrt{w}$ has an infinite derivative at $w=0$. Wherever $\sqrt{w}$ is differentiated it is
-floored at $H_{\min}^2$, because the unguarded $\sqrt{0}$ derivative produces $\infty\cdot 0
-= \text{NaN}$ in the reverse pass (forward mode dodges this by branch selection).
+$\sqrt{w}$ has an infinite derivative at $w = 0$. Wherever it is differentiated it is floored
+at $H_{\min}^2$, since the unguarded derivative produces $\infty\cdot 0 = \text{NaN}$ in the
+reverse pass. `:surface` avoids the square root altogether.
 :::
 
 ## 8. Velocity and surface mass balance {#sec-closures}
 
-The plastic solve returns *geometry* and nothing else. By taking the perfectly-plastic
-($n\to\infty$) limit it has discarded exactly the rate-dependent information that a rate
-factor, a velocity, and a surface mass balance (SMB) live in — the shape is rate-independent
-by construction. Those quantities are not hidden in the solution waiting to be read off;
-recovering them requires *one extra closure* layered on the fixed geometry.
+The plastic solve returns geometry and nothing else. The perfectly plastic ($n\to\infty$)
+limit discards the rate-dependent information that a rate factor, a velocity and a surface
+mass balance (SMB) carry, so recovering them requires one extra closure on the fixed
+geometry.
 
-### The geometry already fixes the flow direction
+The plastic balance @eq-plastic-stress is the membrane-free limit of the SSA/DIVA momentum
+balance: with $\tau_d = \tau_b$ and the basal drag opposing flow, the divergence of the
+longitudinal stresses vanishes. The velocity is therefore local and analytical, and the ice
+flows down the surface gradient, $\hat{\mathbf u} = -\nabla z_s/|\nabla z_s|$. The geometry
+fixes the flow direction but not the flux magnitude. Closing that gap needs one assumption,
+which can be made in two dual ways.
 
-The plastic balance @eq-plastic-stress is the **membrane-free limit of the SSA/DIVA
-momentum balance**: with $\tau_d=\tau_b$ and the basal drag opposing flow, the
-longitudinal-stress-divergence term vanishes. Two consequences follow. First, the velocity
-is *local and analytical* — no elliptic solve. Second, ice flows down the surface gradient,
-along the characteristics of the eikonal, so the direction is known everywhere:
+### Closure B: parameters → velocity → SMB {#sec-closureB}
 
-$$
-\hat{\mathbf u} = -\,\frac{\nabla z_s}{|\nabla z_s|}.
-$$ {#eq-flowdir}
-
-What the geometry does **not** fix is the flux magnitude — a plastic bed sets the direction
-but not the speed. Closing that gap needs one assumption, and there are two dual ways to
-make it.
-
-### Closure B — parameters → velocity → SMB {#sec-closureB}
-
-Assume a rheology and a sliding law. The depth-averaged speed splits into internal
-deformation and basal sliding, both evaluated at the local driving stress $\tau=\tau_b$:
+Assume a rheology and a sliding law. The depth-averaged speed is the sum of basal sliding and
+internal deformation, both at the local driving stress $\tau = \tau_b$:
 
 $$
-|\bar{\mathbf u}| = \underbrace{u_b(\tau_b)}_{\text{sliding law}}
-\;+\; \underbrace{\frac{2A}{n+2}\,\tau_b^{\,n}\,H}_{\text{SIA deformation}} .
+|\bar{\mathbf u}| = u_b(\tau_b) + \frac{2A}{n+2}\,\tau_b^{\,n}\,H .
 $$ {#eq-diva-speed}
 
-The deformational term is the SIA closed form with the plastic constraint $\tau_d=\tau_b$
-substituted; the sliding term inverts the chosen law for the speed that produces drag
-$\tau_b$ (`basal_velocity`). For a regularized-Coulomb bed at its Coulomb cap the sliding
-speed is genuinely undetermined and is returned as `NaN` rather than fabricated. With
-$\bar{\mathbf u}=|\bar{\mathbf u}|\,\hat{\mathbf u}$ in hand, steady-state mass continuity
-gives the implied SMB as a flux divergence:
+The deformational term is the SIA closed form with $\tau_d = \tau_b$, and $u_b$ inverts the
+sliding law (`basal_velocity`). The sliding coefficient ($\beta$ or $C$) may be a field.
+For a regularized-Coulomb bed at its cap the sliding speed is undetermined and is returned
+as `NaN`, unless a speed cap `u_max` is given. Steady-state mass conservation then gives the
+implied SMB as the flux divergence, $\dot b = \nabla\cdot(\bar{\mathbf u}\,H)$
+(`diva_velocity`, `smb_from_velocity`). The velocity is a smooth function of $\tau_b$, so the
+closure doubles as an observation operator for inversion.
 
-$$
-\dot b = \nabla\!\cdot\mathbf q = \nabla\!\cdot(\bar{\mathbf u}\,H).
-$$ {#eq-smbB}
+### Closure A: SMB → velocity {#sec-closureA}
 
-This is `diva_velocity` followed by `smb_from_velocity`. Because the velocity is a smooth
-function of $\tau_b$, so is the SMB — the whole closure doubles as an observation operator
-for $\tau_b$ inversion (§7).
+The dual prescribes $\dot b$ and routes it down the fixed surface for the flux the ice must
+carry in steady state, the balance velocity (Budd and Warner, 1996):
+$\nabla\cdot\mathbf q = \dot b$, $\mathbf q \parallel \hat{\mathbf u}$,
+$|\bar{\mathbf u}| = |\mathbf q|/H$ (`balance_flux`, `balance_velocity`).
 
-### Closure A — SMB → velocity {#sec-closureA}
-
-The dual. Prescribe $\dot b$ and route it down the fixed surface to recover the flux the ice
-*must* carry to be in steady state — the **balance velocity** (Budd & Warner 1996):
-
-$$
-\nabla\!\cdot\mathbf q = \dot b, \qquad \mathbf q \parallel \hat{\mathbf u}, \qquad
-|\bar{\mathbf u}| = \frac{|\mathbf q|}{H}.
-$$ {#eq-smbA}
-
-This is the rigorous reading when $\tau_b$ is a basal sliding resistance, where the speed is
-non-local — set by upstream accumulation, not local rheology. It is `balance_flux` /
-`balance_velocity`.
-
-### One discrete flux operator {#sec-mfd}
-
-Closures A and B are exact inverses *in the continuum*, and the implementation preserves
-that **discretely**. Both are built on a single finite-volume **multiple-flow-direction
-(MFD)** operator: a cell's throughput is partitioned to its lower grounded neighbours in
-proportion to their surface drop. The routing (`balance_flux`, source → throughput) and the
-implied-SMB divergence (`smb_from_velocity`, throughput → source) use the *same* weights, so
-they are adjoint and
-
-$$
-\texttt{balance\_flux}\bigl(\texttt{smb\_from\_velocity}(\bar{\mathbf u})\bigr) = \bar{\mathbf u}\,H
-$$
-
-holds to machine precision. Routing processes cells from highest surface to lowest, so every
-upstream contribution has arrived before a cell distributes its throughput; flux delivered
-to the margin terminates there (the catchment discharge), and mass is conserved exactly.
-This consistency is not cosmetic — it is what makes the SMB-driven reconstruction (§9) have
-a clean fixed point.
-
-### Consistency: where A and B meet
-
-Subtracting the analytical deformation @eq-diva-speed from the balance speed @eq-smbA leaves
-the basal velocity the geometry and SMB jointly demand,
-
-$$
-u_{\text{basal}} = u_{\text{balance}} - u_d,
-$$ {#eq-consistency}
-
-(`implied_basal_velocity`). Inverting a sliding law at this $u_{\text{basal}}$ and the local
-$\tau_b$ gives the bed friction implied by the reconstruction — a check on whether the
-plastic geometry plus an assumed climate is consistent with a plausible bed. A negative
-value flags a cell where the balance flux is smaller than internal deformation alone would
-carry.
+Both closures use one finite-volume multiple-flow-direction (MFD) operator, which partitions
+the throughput of a cell to its lower ice neighbours in proportion to their surface drop.
+Routing and the implied-SMB divergence use the same weights, so
+`balance_flux(smb_from_velocity(u))` returns $\bar{\mathbf u} H$ to machine precision.
+Subtracting the deformation @eq-diva-speed from the balance speed leaves the basal velocity
+that geometry and SMB jointly demand (`implied_basal_velocity`). This is a check on whether
+the plastic geometry and an assumed climate are consistent with a plausible bed.
 
 ## 9. SMB-driven reconstruction {#sec-reconstruct}
 
-Closures A and B read quantities *off* a geometry. Their machinery also supports the dual of
-`solve` itself: reconstruct the geometry **driven by an SMB** instead of a prescribed yield
-stress, on the same prescribed margin (`diva_reconstruct`). This is the plastic solver with
-$\tau_b$ no longer prescribed but *derived* each iteration:
+The closures also support the dual of `solve`: reconstruct the geometry **driven by an SMB**
+instead of a yield stress, on the same prescribed margin (`diva_reconstruct`). Two methods
+are available. `:steady` (the default) solves steady mass conservation directly. `:routing`
+derives $\tau_b$ by routing and is only conditionally stable.
 
-1. route $\dot b$ down the current surface for the required throughput $\mathbf q$ (§8);
-2. invert the DIVA flux law @eq-diva-speed pointwise for the driving stress $\tau_d$ that
-   carries it, $|\mathbf q| = H\bigl(u_b(\tau_d) + \tfrac{2A}{n+2}\tau_d^{\,n}H\bigr)$
-   (monotone in $\tau_d$, solved by bisection);
-3. sweep the plastic eikonal (§4–5) with that $\tau_d$ field for an updated thickness;
-4. under-relax and repeat.
+### `:steady`: steady mass conservation {#sec-steady}
 
-Because routing is the exact inverse of the implied-SMB divergence (§8), a plastic solution
-fed its own closure-B SMB is a **clean fixed point**: step 1 recovers exactly
-$\bar{\mathbf u}H$, step 2 returns exactly the original $\tau_b$, and step 3 reproduces the
-geometry. The eikonal in step 3 also makes the thickness non-local — the interior, where the
-local flux-to-thickness map is singular at divides, is set by integrating inward from the
-margin rather than cell by cell.
+The unknown is $H \ge 0$ on the ice cells, with the membrane-free DIVA flux of
+@eq-diva-speed and the driving stress taken from the geometry:
 
-Like the `:full` outer iteration (§3), the "route, re-invert, re-sweep" map is **not
-contractive** and must be under-relaxed (@eq-hj's damping, here with default
-$\alpha=\texttt{relax}=0.05$). Stiffer or finer grids trade a smaller $\alpha$ for more
-iterations.
+$$
+\mathbf q = -H\,U(\tau, H)\,\frac{\nabla z_s}{|\nabla z_s|}, \qquad
+\tau = \rho_i g H |\nabla z_s|, \qquad U = u_b(\tau) + \frac{2A}{n+2}\tau^n H .
+$$
 
-This is the lighter middle path between the plastic reconstruction (margin and yield stress
-in, geometry out; SMB-agnostic) and a full thermomechanical model: it stays a plastic-style
-geometry solver but is driven by climate. A complete free-margin, nonlinear-diffusion steady
-state is deliberately *not* attempted here — that is the job of a dynamic model such as
-[Yelmo](https://github.com/palma-ice/yelmo).
+With the obstacle $H \ge 0$, steady state is the complementarity problem
+
+$$
+H \ge 0, \qquad F(H) = \nabla\cdot\mathbf q - \dot b \ge 0, \qquad H\,F(H) = 0 ,
+$$
+
+where $F > 0$ at $H = 0$ marks a cell where ablation exceeds the inflow. This is the steady
+SIA with sliding, a monotone degenerate-elliptic problem with a unique solution.
+
+Fluxes are staggered on the cell faces. Between two ice cells the face thickness is the mean
+where the surface drop $\Delta s$ across the face is small against the upstream thickness,
+and limited towards the upstream value where it is not (downstream weight
+$\min(1/2,\ H_{up}/(4\Delta s))$). This keeps the face flux non-increasing in the downstream
+thickness, so $F$ is non-increasing in the neighbouring thicknesses, as the active-set
+Newton step requires. The tangential slope is the mean of the central differences at the two
+cells. Between an ice cell and an ice-free neighbour the flux is the one-sided SIA flux to the
+margin, which lies at the margin position of §6. It uses the slope and the mean thickness of
+the segment between cell centre and margin, and never flows inward. Unlike the plastic
+profile, whose flux tends to zero at a land margin, this flux grows with the thickness of the
+ice cell, so every SMB has a steady state. For a Coulomb bed without a speed cap, the driving
+stress of the fluxes is capped at $0.999\,C$.
+
+The implied SMB of a geometry is the divergence of the same face fluxes
+(`smb_flux_divergence`). A geometry forced by its own implied SMB is therefore a root of $F$.
+`smb_flux_divergence` also returns the outflow through the margin faces of each ice cell, split
+into land and marine (an ice-free neighbour below sea level), and the surface velocity of the
+same closure. An optional `τ_cap` limits the driving stress of the fluxes, e.g., to $\tau_b$,
+since a plastic bed carries at most its yield stress.
+
+The solver is pseudo-transient continuation with one semismooth Newton step per pseudo-time
+step. Each step solves $\Phi(H) = \min\!\bigl(H,\ c\,G(H)\bigr) = 0$ for
+$G(H) = (H - H_k)/\Delta t + F(H)$, where a cell is active ($H = 0$) when its own Newton step
+would empty it. The Jacobian $\partial F/\partial H$ is computed by finite differences with
+nine colours, since $F$ at a cell depends only on the $3\times3$ block around it. The linear
+system over the inactive cells is solved directly (`SparseArrays`). The new iterate is
+$\max(H + \lambda\,\delta H, 0)$, with $\lambda$ halved until the rms residual decreases. The
+pseudo-time step grows by switched evolution relaxation (at least 1.5× after a step that does
+not increase the residual), and the iteration stops when $\max|\min(H, F)|$ falls below
+`res_tol`. The pseudo-time term keeps the system well posed at divides, where
+$\partial F/\partial H$ vanishes with the surface slope.
+
+In tests the method recovers the plastic geometry from a cold start under its own implied SMB
+to about $10^{-12}$ m in a few tens of steps. For the Vialov profile ($n = 3$, $\dot b$ = 0.3 m yr⁻¹,
+$L$ = 300 km) the maximum relative error is about 2.6, 1.1, 0.6 and 0.3 % at $\Delta x$ =
+20, 10, 5 and 2.5 km, i.e., first order.
+
+### `:routing`: derived yield stress
+
+`:routing` iterates the plastic solve with $\tau_b$ derived from the SMB: (1) route $\dot b$
+down the current surface for the throughput (§8), (2) invert the flux law @eq-diva-speed per
+cell for the driving stress that carries it (bisection), (3) solve the plastic equation with
+that stress (`inner_mode`), and (4) under-relax and repeat. A plastic solution forced by its
+own closure-B SMB is an exact fixed point of this map.
+
+The map is, however, only conditionally stable. The MFD weights split the flux of a cell by
+surface drops of slope × $\Delta x$, i.e., a few metres, so a thickness change $\delta H$
+moves the split, the throughput and the derived stress by $O(\delta H/(\text{slope}\,\Delta x))$.
+The Jacobian of the map at the fixed point thus has eigenvalues
+$\lambda \sim -H/(\text{slope}\,\Delta x)$, about −50 to −600 in our tests, and the
+under-relaxed iteration is stable only for `relax` $< 2/(1-\lambda)$, i.e., 0.003–0.04. The
+bound shrinks with resolution, and routing changes make the map discontinuous. This is a
+structural property of the method rather than a tuning problem, which is why `:steady` is
+the default.
 
 ## 10. What was deliberately dropped {#sec-dropped}
 
 Relative to ICESHEET 2.0, the grid Hamilton–Jacobi solver makes the following machinery
 unnecessary: method-of-characteristics flowline tracing, crossover detection (the
-motorcycle-graph algorithm), saddle/dome detection and polygon splitting, the GIA / sea-level
-iteration loop, and the GMT projection/preprocessing pipeline.
+motorcycle-graph algorithm), saddle and dome detection with polygon splitting, the GIA and
+sea-level iteration loop, and the GMT projection and preprocessing pipeline.
