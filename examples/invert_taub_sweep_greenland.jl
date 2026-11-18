@@ -5,7 +5,7 @@
 # principled, automatic replacement for ICESHEET's hand-chosen domain count (Gowan et al.).
 #
 # Run with:  julia --project=examples examples/invert_taub_sweep_greenland.jl
-#   env knobs:  GRID=GRL-32KM  N_ITER=100  MODE=flat
+#   env knobs:  GRID=GRL-32KM  N_ITER=100  MODE=surface
 
 using PlasticIceSheet
 using NCDatasets
@@ -30,7 +30,7 @@ const SED_THRESH = 50.0
 const N_ITER     = parse(Int, get(ENV, "N_ITER", "100"))
 const LR         = 5.0e3
 const τ_MIN, τ_MAX = 5.0e3, 4.0e5
-const MODE   = Symbol(get(ENV, "MODE", "flat"))
+const MODE   = Symbol(get(ENV, "MODE", "surface"))
 const SOLVER = (; mode = MODE, params = PlasticParams(),
                 max_sweeps = 600, tol = 1.0e-9, n_outer = 500, outer_tol = 1.0e-5, relax = 0.4)
 

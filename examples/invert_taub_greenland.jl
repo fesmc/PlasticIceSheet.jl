@@ -19,7 +19,7 @@
 # recovered by reverse-mode AD (differentiable_thickness) + Adam. See docs/inversion.qmd.
 #
 # Run with:  julia --project=examples examples/invert_taub_greenland.jl
-#   env knobs:  METHOD=percell  GRID=GRL-16KM  N_ITER=250  MODE=flat
+#   env knobs:  METHOD=percell  GRID=GRL-16KM  N_ITER=250  MODE=surface
 
 using PlasticIceSheet
 using NCDatasets
@@ -49,9 +49,9 @@ const REG_KM     = 32.0          # τ_b smoothing length scale (km)
 const N_ITER = parse(Int, get(ENV, "N_ITER", "250"))
 const LR     = 5.0e3
 const τ_MIN, τ_MAX = 5.0e3, 4.0e5
-# :flat gives a robust, well-conditioned eikonal adjoint; :full's dense direct adjoint is
-# ill-posed on big grids (singular) — see docs/inversion.qmd.
-const MODE   = Symbol(get(ENV, "MODE", "flat"))
+# :surface (default) and :flat have well-conditioned adjoints (monotone schemes); :surface
+# includes the bed relief. :full's adjoint is ill-posed on large grids — see docs/inversion.qmd.
+const MODE   = Symbol(get(ENV, "MODE", "surface"))
 const SOLVER = (; mode = MODE, params = PlasticParams(),
                 max_sweeps = 600, tol = 1.0e-9, n_outer = 500, outer_tol = 1.0e-5, relax = 0.4)
 
