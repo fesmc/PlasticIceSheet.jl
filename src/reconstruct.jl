@@ -1,20 +1,19 @@
-# Feature (2): the SMB-driven reconstruction — the dual of `solve`. Where `solve` takes a
-# yield stress `τ_b` and returns geometry, this takes a surface mass balance and returns
-# the geometry (and velocity) consistent with it on the *same prescribed margin*.
+# The SMB-driven reconstruction — the dual of `solve`. Where `solve` takes a yield stress
+# `τ_b` and returns geometry, this takes a surface mass balance and returns the geometry
+# consistent with it on the *same prescribed margin*. Two methods:
 #
-# It is the plastic solver with `τ_b` no longer prescribed but *derived* each iteration:
+# :steady (default) — steady mass conservation ∇·q = smb with the membrane-free DIVA flux,
+#   solved directly (pseudo-transient continuation + semismooth Newton; `steady.jl`).
 #
+# :routing — the plastic solver with `τ_b` derived each iteration:
 #   1. route the SMB down the current surface          → required throughput `Q`
 #   2. invert the DIVA flux law pointwise for `τ_d`     such that q = H·(u_b(τ_d)+u_def(τ_d,H))
-#   3. sweep the plastic eikonal with that `τ_d` field  → updated thickness
+#   3. sweep the plastic equation with that `τ_d` field → updated thickness
 #   4. under-relax and repeat.
-#
-# Because routing (`balance_flux`) is the exact inverse of the implied-SMB divergence
-# (`smb_from_velocity`), a plastic solution fed its own closure-B SMB is a clean fixed
-# point: step 1 recovers exactly `ū H`, step 2 returns exactly the original `τ_b`, and step
-# 3 reproduces the geometry. The eikonal in step 3 also makes the thickness non-local, so
-# the interior (where the local flux→thickness map is singular at divides) is set by
-# integrating from the margin inward rather than cell-by-cell.
+#   A plastic solution fed its own closure-B SMB is an exact fixed point (routing is the
+#   exact inverse of `smb_from_velocity`), but the map is only conditionally stable: its
+#   Jacobian has eigenvalues λ ~ −H/(slope·Δx), so it converges only for
+#   relax < 2/(1 − λ), small and shrinking with resolution. Kept for comparison.
 
 # Maximum drag a sliding law can carry (the Coulomb cap; ∞ for the unbounded power laws).
 _drag_cap(::SlidingLaw) = Inf
@@ -39,69 +38,90 @@ function _invert_driving_stress(q, H, sliding::SlidingLaw, rheology::GlenRheolog
 end
 
 """
-    diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding, z_ss = 0.0, margin = :face, params = PlasticParams(),
-                     H_init = nothing, n_outer = 300, relax = 0.3, tol = 0.5,
+    diva_reconstruct(z_b, mask, smb, dx, dy; rheology, sliding, method = :steady,
+                     z_ss = 0.0, margin = :face, params = PlasticParams(),
+                     H_init = nothing, τ_init = 5.0e4,
+                     # method = :steady
+                     res_tol = 1e-6, n_steady = 500, dt0 = 1.0, dt_max = 1e8, verbose = false,
+                     # method = :routing
+                     inner_mode = :surface, n_outer = 1000, relax = 0.05, tol = 1.0,
                      τ_hi = 5.0e5, max_sweeps = 400, sweep_tol = 1e-9)
 
 Reconstruct a steady-state ice surface and thickness **driven by surface mass balance
-`smb`** rather than by a prescribed yield stress, on the fixed grounded `mask`. Internally
-iterates: route `smb` down the surface for the required flux, invert the DIVA flow law
-(`rheology` + `sliding`) for the driving stress that carries it, and sweep the plastic
-eikonal — see the file header. `smb` may be a scalar or a field.
+`smb`** (m ice yr⁻¹, scalar or field) rather than by a prescribed yield stress, on the
+fixed grounded `mask`, with the DIVA flux law of `rheology` + `sliding`. Inputs mirror
+[`solve`](@ref) (`z_b`, `mask`, `dx`, `dy`, `z_ss`, `margin`, `params`).
 
-Inputs mirror [`solve`](@ref) (`z_b`, `mask`, `dx`, `dy`, `z_ss`, `margin`, `params`). Reconstruction
-controls:
-- `H_init`    : initial thickness (defaults to a plastic solve at a nominal uniform `τ_b`)
-- `n_outer`   : maximum outer iterations
-- `relax`     : under-relaxation factor in (0,1]; lower is more robust, slower
-- `tol`       : convergence threshold on `max|ΔH|` (m)
-- `τ_hi`      : upper bracket (Pa) for the driving-stress inversion (flux-limited above it)
-- `max_sweeps`, `sweep_tol` : inner eikonal controls
+`method = :steady` (default) solves steady mass conservation directly,
 
-Returns `(z_s, H)` like [`solve`](@ref). The plastic solution is a fixed point when `smb`
-is its own [`smb_from_velocity`](@ref); for a general `smb` the result is the plastic-style
-geometry whose DIVA flux balances that climate. Bed relief is handled to first order (the
-inner sweep runs in `:flat` mode).
+    ∇·q = smb,  q = −H (u_b(τ) + 2A/(n+2) τⁿ H) ∇z_s/|∇z_s|,  τ = ρ_i g H |∇z_s|,  H ≥ 0,
 
-Like the `:full` plastic mode, the outer "route, re-invert, re-sweep" map is *not*
-contractive, so it must be under-relaxed: the default `relax = 0.05` converges the test
-configurations, but stiffer or finer grids need a smaller `relax` and more `n_outer`
-(the trade is robustness vs. iterations).
+by pseudo-transient continuation with a semismooth Newton step per pseudo-time step
+(cells where ablation exceeds the inflow end ice-free). It converges when the
+complementarity residual `max|min(H, ∇·q − smb)| < res_tol` (m yr⁻¹), within `n_steady`
+pseudo-time steps from `dt0` (grown up to `dt_max`, yr). The geometry `H` is a root under
+its own [`smb_flux_divergence`](@ref).
+
+`method = :routing` iterates route → invert for `τ_d` → plastic sweep (`inner_mode`) →
+under-relax (`relax`) until `max|ΔH| < tol` (m) or `n_outer`; `τ_hi` bounds the
+driving-stress inversion. It is only conditionally stable (needs `relax` ≲ slope·Δx/H) and
+is kept for comparison.
+
+The start is `H_init`, or a plastic solve (`:surface`, or `inner_mode` for routing) at the
+uniform `τ_b = τ_init`. Returns `(z_s, H)` like [`solve`](@ref); warns if the method did
+not converge.
 """
 function diva_reconstruct(z_b::AbstractMatrix, mask::AbstractMatrix{Bool}, smb, dx::Real, dy::Real;
-                          rheology::GlenRheology, sliding::SlidingLaw, z_ss = 0.0, margin = :face,
-                          params::PlasticParams = PlasticParams(), H_init = nothing,
-                          n_outer::Int = 1000, relax = 0.05, tol = 1.0, τ_hi = 5.0e5,
-                          max_sweeps::Int = 400, sweep_tol = 1e-9)
+                          rheology::GlenRheology, sliding::SlidingLaw, method::Symbol = :steady,
+                          z_ss = 0.0, margin = :face, params::PlasticParams = PlasticParams(),
+                          H_init = nothing, τ_init = 5.0e4,
+                          res_tol = 1e-6, n_steady::Int = 500, dt0 = 1.0, dt_max = 1e8,
+                          verbose::Bool = false,
+                          inner_mode::Symbol = :surface, n_outer::Int = 1000, relax = 0.05,
+                          tol = 1.0, τ_hi = 5.0e5, max_sweeps::Int = 400, sweep_tol = 1e-9)
     size(z_b) == size(mask) || throw(DimensionMismatch("z_b and mask must match"))
-    p = params
+    method in (:steady, :routing) || throw(ArgumentError("method must be :steady or :routing, got :$method"))
     smbf = _as_field(smb, size(z_b), "smb")
     _check_law(sliding, size(z_b))
-
+    start_mode = method === :steady ? :surface : inner_mode
     H = H_init === nothing ?
-        last(solve(z_b, 5.0e4, mask; dx, dy, z_ss, margin, params = p, mode = :flat, max_sweeps, tol = sweep_tol)) :
-        copy(float.(H_init))
-    bc = _bc(z_b, _as_field(z_ss, size(z_b), "z_ss"), p, :flat)
+        Matrix{Float64}(last(solve(z_b, τ_init, mask; dx, dy, z_ss, margin, params,
+                                   mode = start_mode, max_sweeps, tol = sweep_tol))) :
+        Matrix{Float64}(_as_field(H_init, size(z_b), "H_init"))
+
+    if method === :steady
+        P = _SteadyProblem(z_b, mask, dx, dy; rheology, sliding, z_ss, margin, params, τ_cap = nothing)
+        n, res, ok = _steady_solve!(H, smbf, P; res_tol, n_steady, dt0, dt_max, verbose)
+        ok || @warn "diva_reconstruct (:steady): residual $(round(res; sigdigits = 3)) m/yr above res_tol after $n steps"
+    else
+        ok = _reconstruct_routing!(H, z_b, mask, smbf, dx, dy, rheology, sliding, z_ss, margin, params;
+                                   inner_mode, n_outer, relax, tol, τ_hi, max_sweeps, sweep_tol)
+        ok || @warn "diva_reconstruct (:routing): max|ΔH| above tol after $n_outer iterations"
+    end
+    z_s = @. ifelse(mask, H + z_b, z_b)
+    return z_s, H
+end
+
+# The routing iteration, from H (modified in place); returns whether it converged.
+function _reconstruct_routing!(H, z_b, mask, smbf, dx, dy, rheology, sliding, z_ss, margin, p;
+                               inner_mode, n_outer, relax, tol, τ_hi, max_sweeps, sweep_tol)
+    bc = _bc(z_b, _as_field(z_ss, size(z_b), "z_ss"), p, inner_mode)
     dfac = _margin_dfac(mask, margin)
     w = _flux_width(dx, dy)
     τ_d = similar(H)
-    z_s = @. ifelse(mask, H + z_b, z_b)
-
     for _ in 1:n_outer
         z_s = @. ifelse(mask, H + z_b, z_b)
         Q = balance_flux(z_s, mask, smbf, dx, dy)
         @inbounds for k in eachindex(H)
             τ_d[k] = mask[k] ?
-                _invert_driving_stress(Q[k] / w, H[k], _law_at(sliding, k), rheology, τ_hi) : zero(eltype(H))
+                _invert_driving_stress(Q[k] / w, H[k], _law_at(sliding, k), rheology, τ_hi) : 0.0
         end
-        wnew = _solve_u(τ_d, z_b, mask, bc, dfac, dx, dy, p, :flat;
-                        max_sweeps, tol = sweep_tol, n_outer = 1, outer_tol = 1.0)
-        Hnew = @. ifelse(mask, sqrt(max(wnew, zero(eltype(wnew)))), zero(eltype(wnew)))
+        u = _solve_u(τ_d, z_b, mask, bc, dfac, dx, dy, p, inner_mode;
+                     max_sweeps, tol = sweep_tol, n_outer = 1, outer_tol = 1.0)
+        Hnew = last(_geometry(u, z_b, mask, inner_mode))
         Δ = maximum(abs.(Hnew .- H))
         @. H = (1 - relax) * H + relax * Hnew
-        Δ < tol && break
+        Δ < tol && return true
     end
-
-    z_s = @. ifelse(mask, H + z_b, z_b)
-    return z_s, H
+    return false
 end

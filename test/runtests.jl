@@ -466,7 +466,7 @@ end
     @test maximum(abs.(ib.u_basal[sel] .- basal_velocity(sl, τ2))) < 1e-6
 end
 
-@testset "SMB-driven reconstruction (feature 2)" begin
+@testset "SMB-driven reconstruction, method = :routing" begin
     relerr(H, H0, sel) = (d = sort(abs.(H[sel] .- H0[sel]) ./ H0[sel]); d[length(d) ÷ 2])
 
     nx, ny = 41, 41
@@ -487,14 +487,70 @@ end
 
     # The plastic solution is a clean fixed point of the SMB-driven map: started there with
     # its own implied SMB, it does not move (the consistency the operators were built for).
-    _, Hfp = diva_reconstruct(z_b, mask, smb, dx, dy; rheology = r, sliding = sl, H_init = H0)
+    ro = (; rheology = r, sliding = sl, method = :routing, inner_mode = :flat)
+    _, Hfp = diva_reconstruct(z_b, mask, smb, dx, dy; ro..., H_init = H0)
     @test maximum(abs.(Hfp[mask] .- H0[mask])) < 1e-6
 
     # And it is recovered from a cold (flat) start by the under-relaxed iteration.
     Hg = fill(400.0, nx, ny)
     Hg[.!mask] .= 0
-    _, Hc = diva_reconstruct(z_b, mask, smb, dx, dy; rheology = r, sliding = sl,
-                             H_init = Hg, relax = 0.05, n_outer = 800)
+    _, Hc = diva_reconstruct(z_b, mask, smb, dx, dy; ro..., H_init = Hg, relax = 0.05, n_outer = 800)
     @test relerr(Hc, H0, sel) < 0.02
     @test isapprox(maximum(Hc), maximum(H0); rtol = 0.05)
+end
+
+@testset "SMB-driven reconstruction, method = :steady" begin
+    # Bed bump; the plastic (:surface) solution under its own steady implied SMB is a root,
+    # and the steady solve recovers it from a cold start.
+    n, dx = 40, 2000.0
+    L = n * dx
+    xy = [((i - 0.5) * dx - L / 2, (j - 0.5) * dx - L / 2) for i in 1:n, j in 1:n]
+    z_b = [300 * exp(-(x^2 + y^2) / (2 * (0.25L)^2)) for (x, y) in xy]
+    mask = [hypot(x, y) <= 0.375L for (x, y) in xy]
+    r = GlenRheology(A = 1.0e-16, n = 3.0)
+    sl = WeertmanSliding(β = 1.0e4, m = 3.0)
+    kw = (; rheology = r, sliding = sl, z_ss = -1.0e4)
+    _, Hp = solve(z_b, 1.0e5, mask; dx, dy = dx, z_ss = -1.0e4)
+    im = smb_flux_divergence(z_b, Hp, mask, dx, dx; kw...)
+    _, H0 = diva_reconstruct(z_b, mask, im.smb, dx, dx; kw..., H_init = Hp)
+    @test H0 == Hp
+    _, H1 = diva_reconstruct(z_b, mask, im.smb, dx, dx; kw...)
+    @test maximum(abs, H1 .- Hp) < 1e-6 * maximum(Hp)
+
+    # Margin outflow: marine west of the divide, land east; it balances the implied SMB.
+    z_ss = [xy[k][1] < 0 ? z_b[k] + 50 : -1.0e4 for k in CartesianIndices(z_b)]
+    _, Hm = solve(z_b, 1.0e5, mask; dx, dy = dx, z_ss)
+    o = smb_flux_divergence(z_b, Hm, mask, dx, dx; rheology = r, sliding = sl, z_ss)
+    @test all(>=(0), o.q_land) && all(>=(0), o.q_marine)
+    @test sum(o.q_land .+ o.q_marine) ≈ sum(o.smb) rtol = 1e-10
+    west = [x < 0 for (x, _) in xy]
+    @test sum(o.q_land[west]) == 0 && sum(o.q_marine[.!west]) == 0
+    @test sum(o.q_marine) > 0 && sum(o.q_land) > 0
+    @test o.us_x[n ÷ 2 + 8, n ÷ 2] > 0 && o.us_x[n ÷ 2 - 8, n ÷ 2] < 0
+    # A uniform coefficient field equals the scalar law; τ_cap lowers the outflow.
+    of = smb_flux_divergence(z_b, Hm, mask, dx, dx; rheology = r, z_ss,
+                             sliding = WeertmanSliding(β = fill(1.0e4, n, n), m = 3.0))
+    @test of.smb == o.smb
+    oc = smb_flux_divergence(z_b, Hm, mask, dx, dx; rheology = r, sliding = sl, z_ss, τ_cap = 1.0e5)
+    @test sum(oc.q_land .+ oc.q_marine) < sum(o.q_land .+ o.q_marine)
+    # Coulomb with a speed cap: finite.
+    rc = RegularizedCoulomb(C = 1.2e5, u_0 = 100.0, m = 3.0, u_max = 1000.0)
+    @test all(isfinite, smb_flux_divergence(z_b, Hm, mask, dx, dx; rheology = r, sliding = rc, z_ss).smb)
+
+    # Vialov steady profile (n = 3, a = 0.3 m/yr, L = 300 km, no sliding): first-order
+    # convergence, within 2 % at 5 km.
+    A, nn, a, Lv = 1.0e-16, 3.0, 0.3, 300.0e3
+    G = 2A * ρg^nn / (nn + 2)
+    pw = (nn + 1) / nn
+    function vialov_err(dxv)
+        nx = round(Int, Lv / dxv) + 3
+        m = [(i - 0.5) * dxv < Lv for i in 1:nx, _ in 1:3]
+        _, H = diva_reconstruct(zeros(nx, 3), m, a, dxv, dxv; rheology = GlenRheology(A = A, n = nn),
+                                sliding = LinearSliding(β = 1.0e30), z_ss = -1.0e4)
+        maximum(i -> (x = (i - 0.5) * dxv; ex = (2 * (a / G)^(1 / nn) * (Lv^pw - x^pw))^(nn / (2nn + 2));
+                      abs(H[i, 2] - ex) / ex), [i for i in 1:nx if (i - 0.5) * dxv <= 0.9Lv])
+    end
+    e = vialov_err.((20.0e3, 10.0e3, 5.0e3))
+    @test e[3] < e[2] < e[1]
+    @test e[3] < 0.02
 end

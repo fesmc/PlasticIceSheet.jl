@@ -89,9 +89,7 @@ sliding = RegularizedCoulomb(C = C_cap, u_0 = U0_SLIDE, m = M_SLIDE)
 
 println("Running diva_reconstruct …")
 t0 = time()
-z_s, H = diva_reconstruct(z_bed, mask, smb, dx, dy;
-                          rheology = RHEOLOGY, sliding = sliding,
-                          n_outer = 1000, relax = 0.05, tol = 1.0)
+z_s, H = diva_reconstruct(z_bed, mask, smb, dx, dy; rheology = RHEOLOGY, sliding = sliding)
 @printf("done in %.1f s\n", time() - t0)
 
 # --- balance velocity on the reconstructed geometry -------------------------------
