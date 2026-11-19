@@ -1,5 +1,5 @@
 ! Route c client: per call, write inputs to /dev/shm, send a request on a FIFO, block on the
-! reply FIFO, read outputs. Times the full round trip. usage: routec_client nx ny ncalls mode cmdfifo respfifo
+! reply FIFO, read outputs. Times the full round trip. usage: routec_client nx ny ncalls mode(0=flat,1=full,2=surface) cmdfifo respfifo
 program routec_client
     use iso_c_binding, only: c_double
     implicit none

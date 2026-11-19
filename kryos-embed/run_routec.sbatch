@@ -15,7 +15,7 @@ echo "== one-shot startup (using KryosEmbed; nothing else)"
 echo "== persistent worker"
 ifx -O2 fortran/routec_client.f90 -o routec_client
 D=/dev/shm/kp_$$; mkdir -p $D; cmd=$D/cmd; resp=$D/resp; mkfifo $cmd $resp
-for sz in "200 300" "400 400"; do for mode in 0 1; do
+for sz in "200 300" "400 400"; do for mode in 0 1 2; do
   $J ${SYSIMG:+-J $SYSIMG} routec/server.jl $cmd $resp & SP=$!
   echo "-- $sz mode=$mode"; ./routec_client $sz 6 $mode $cmd $resp
   wait $SP

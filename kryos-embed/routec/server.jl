@@ -11,8 +11,8 @@ while true
     f = split(line)
     f[1] == "quit" && break
     nx, ny = parse(Int, f[2]), parse(Int, f[3]); dx, dy = parse(Float64, f[4]), parse(Float64, f[5])
-    mode = parse(Int, f[6]) == 0 ? :flat : :full
     resp = try
+        mode = KryosEmbed.mode_sym(parse(Int, f[6]))
         zb = Matrix{Float64}(undef, nx, ny); tb = similar(zb); m8 = Matrix{Int8}(undef, nx, ny)
         open(f[7], "r") do io; read!(io, zb); read!(io, tb); read!(io, m8); end
         zs, H = solve(zb, tb, m8 .!= 0; dx, dy, mode)

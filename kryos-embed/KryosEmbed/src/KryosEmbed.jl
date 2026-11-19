@@ -19,7 +19,10 @@ export synthetic_case, entry_solve, entry_grad, lasterr
 const LASTERR = Ref("")
 lasterr() = LASTERR[]
 
-mode_sym(m) = m == 0 ? :flat : :full
+# host mode code: 0 = :flat, 1 = :full, 2 = :surface (the package default)
+const MODES = (:flat, :full, :surface)
+mode_sym(m) = 0 <= m < length(MODES) ? MODES[m + 1] :
+    throw(ArgumentError("mode code $m: expected 0 (flat), 1 (full) or 2 (surface)"))
 
 # Deterministic synthetic case (the Fortran test program evaluates the same formulas).
 function synthetic_case(nx::Int, ny::Int)

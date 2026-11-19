@@ -2,7 +2,7 @@
 ! fetch C function pointers, then call the plastic solver N times on Fortran arrays
 ! (no copies, no Julia objects crossing the boundary), optionally one gradient call.
 !
-! usage: embed_main nx ny ncalls mode(0=flat,1=full) do_grad(0/1/2=krylov) [sysimage.so]
+! usage: embed_main nx ny ncalls mode(0=flat,1=full,2=surface) do_grad(0/1/2=krylov) [sysimage.so]
 program embed_main
     use iso_c_binding
     implicit none

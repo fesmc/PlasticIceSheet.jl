@@ -1,5 +1,5 @@
 ! Route b host: link the juliac --trim shared library (libplastic.so) and call kp_solve directly.
-! usage: routeb_main nx ny ncalls mode
+! usage: routeb_main nx ny ncalls mode(0=flat,1=full,2=surface)
 program routeb_main
     use iso_c_binding
     implicit none
