@@ -17,6 +17,7 @@ using SparseArrays: sparse
 include("constants.jl")
 include("godunov.jl")
 include("solve.jl")
+include("coulomb.jl")
 include("rheology.jl")
 include("velocity.jl")
 include("balance.jl")
@@ -26,6 +27,7 @@ include("diagnostics.jl")
 include("io.jl")
 
 export PlasticParams, solve
+export CoulombYield, godunov_coulomb, coulomb_taub
 export ice_volume, ice_area, surface_misfit, stress_residual
 export flotation_thickness, godunov_eikonal, godunov_surface, sweep_eikonal, godunov_residual
 export differentiable_thickness, margin_frac_from_sdist

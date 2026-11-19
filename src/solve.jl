@@ -55,8 +55,9 @@ end
 
 # --- Godunov update and fast sweeping ----------------------------------------------
 
-# The local update solved at each cell: the eikonal |∇u| = F (`_Eikonal`, u = H²), or the
-# plastic surface equation |∇z_s| = K/(z_s − z_b) (`_Surface`, u = z_s, K = τ_b/(ρ_i g)).
+# The local update solved at each cell: the eikonal |∇u| = F (`_Eikonal`, u = H²), the
+# plastic surface equation |∇z_s| = K/(z_s − z_b) (`_Surface`, u = z_s, K = τ_b/(ρ_i g)),
+# or its Coulomb yield law (`_Coulomb` in coulomb.jl, per-cell data (μ, H_f)).
 struct _Eikonal end
 struct _Surface end
 @inline _kernel(::_Eikonal, a, da, b, db, F, zb) = godunov_eikonal(a, da, b, db, F)
@@ -108,9 +109,14 @@ function _sweep_once!(kern, u, F, zb, mask, dfac, dx, dy, xdir::Int, ydir::Int)
     return change
 end
 
+# Number type of the per-cell kernel data: a field of numbers, or of tuples (e.g. (μ, H_f)
+# of the Coulomb kernel).
+_numtype(F) = eltype(F)
+_numtype(F::AbstractArray{<:Tuple}) = promote_type(fieldtypes(eltype(F))...)
+
 # Fast sweeping for the local update `kern`, from Inf on the ice cells and `bc` elsewhere.
 function _sweep(kern, F, zb, mask, bc, dfac, dx, dy; max_sweeps::Int, tol)
-    T = promote_type(eltype(F), eltype(bc), typeof(dx), typeof(dy))
+    T = promote_type(_numtype(F), eltype(bc), typeof(dx), typeof(dy))
     u = Matrix{T}(undef, size(mask)...)
     @inbounds for k in eachindex(u)
         u[k] = mask[k] ? T(Inf) : T(bc[k])

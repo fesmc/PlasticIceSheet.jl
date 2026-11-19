@@ -219,6 +219,8 @@ end
     @test med(rs[inner]) < med(rf[inner]) / 3
 end
 
+include("coulomb.jl")
+
 @testset "AD: ∂(volume)/∂τ_b via ForwardDiff matches finite difference" begin
     nx, ny = 36, 36
     dx = dy = 2000.0
