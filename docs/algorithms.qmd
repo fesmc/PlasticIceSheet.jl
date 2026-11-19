@@ -93,6 +93,53 @@ NH-32KM) it converges in about 10 sweeps, while the `:full` fixed point does not
 for any relaxation tested (§3). These real-data results come from the Fortran port of the
 package, which uses the same scheme. For these reasons `:surface` is the default.
 
+### Coulomb yield law {#sec-coulomb}
+
+The basal shear stress can follow a Coulomb yield law instead of a prescribed field
+(Robinson et al., 2020), passed to `solve` as `CoulombYield(μ; H_N, p, δ)`:
+
+$$
+\tau_b = \mu\, N_\text{eff}, \qquad
+N = \rho_i g H \max\!\big((1 - H_f/H)^p,\ \delta\big), \qquad
+\frac{1}{N_\text{eff}} = \frac{1}{N} + \frac{1}{\rho_i g H_N},
+$$ {#eq-coulomb}
+
+where $\mu$ is the friction coefficient (times any bed factor), $H_f$ the flotation
+thickness, $p \in [0, 1]$ the exponent of the ocean connection (Leguy et al., 2014), $H_N$ the
+cap of $N_\text{eff}/(\rho_i g)$ and $\delta \in (0, 1]$ a floor of $N$ as a fraction of the
+overburden (as Bueler and van Pelt, 2015). The plastic equation becomes a slope law,
+$|\nabla z_s| = s(H) = \mu N_\text{eff}/(\rho_i g H)$. The slope is a constant $\mu$ for
+$H \ll H_N$ on land (a wedge), gives the Nye profile of $\tau_b = \mu\rho_i g H_N$ for
+$H \gg H_N$, and equals $\mu\delta H_N/(\delta H + H_N)$ at flotation.
+
+The update keeps the structure of @eq-surface-update. Each axis carries the slope at its
+edge-mean thickness $h_a = (H + \alpha_+)/2$:
+
+$$
+T_a(u) = \frac{(u - a)_+}{\Delta x\, s(h_a)}, \qquad T_a^2 + T_b^2 = 1 ,
+$$
+
+which reduces to @eq-surface-update for $s = k/h$. On a marine cell, a neighbour below the
+flotation surface of the cell is raised to it, since grounded ice is at least at flotation.
+For $p \le 1$ and $\delta > 0$ the root is unique and the update monotone. It is bracketed
+by the smaller neighbour and $\min_a (a + \mu\,\Delta_a)$ and found by Newton iteration
+safeguarded by bisection (`godunov_coulomb`). Only `:surface` mode has this kernel.
+
+The floor $\delta > 0$ makes the solution unique. It bounds the slope from below at
+flotation, so every update lies strictly above its smaller upwind value and the fixed point
+is ordered from the margin inward. Without the floor, cells at flotation can support each
+other with zero increments. A marine trough on a retrograde bed then has several fixed
+points, and the one the sweep reaches changes with decimetre changes of the bed or sea
+level. In coupled runs of the Fortran port with an Earth model this caused jumps of the ice
+volume, which $\delta = 0.05$ removed and $\delta = 0.02$ did not.
+
+The tests reproduce the flat-land profile $H^2/2 + H_N H = \mu H_N x$ exactly and the wedge
+and Nye limits. On a marine bed rising inland from 800 m below sea level, the error against
+an ODE reference is about 25, 12, 6 and 3 m at 8, 4, 2 and 1 km, identical to the Fortran
+port. Forward-mode AD differentiates through the update: one Newton step at the converged
+root makes the derivative the implicit one, whichever iteration reached it. Reverse mode
+(`differentiable_thickness`) does not yet support the Coulomb law.
+
 ## 3. `:flat` and `:full` modes: solving for $H^2$ {#sec-full}
 
 On a flat bed, multiplying @eq-plastic by $2H$ and using $\nabla(H^2) = 2H\nabla H$ gives a

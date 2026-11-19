@@ -59,6 +59,21 @@ z_s, H = solve(z_b, τ_b, mask; dx, dy, margin = frac)
 On a 300 × 300 grid a `:surface` solve takes about 6 ms, `:flat` about 3 ms and a converging
 `:full` solve about 1 s.
 
+### Coulomb yield law
+
+A Coulomb yield law, $\tau_b = \mu N_\text{eff}(H)$, replaces the prescribed $\tau_b$
+([Algorithms §2](algorithms.qmd#sec-coulomb)):
+
+```julia
+law = CoulombYield(μ; H_N = 1000.0, p = 1.0, δ = 0.05)   # μ scalar or field
+z_s, H = solve(z_b, law, mask; dx, dy, z_ss)            # mode = :surface only
+τ_b = coulomb_taub(H, z_b, mask, law; z_ss)             # the law's τ_b at H
+```
+
+`H_N` (m) caps the effective pressure and `δ ∈ (0, 1]` floors it at flotation; the floor
+keeps the solution unique and continuous in the bed and sea level. Forward-mode derivatives
+with respect to `μ` work; `differentiable_thickness` does not take the law.
+
 ### Diagnostics
 
 ```julia
@@ -211,7 +226,8 @@ GRL-32KM grids from an `examples/ice_data` directory (not included).
 ## Fortran library
 
 [PlasticIceSheet](https://github.com/fesmc/PlasticIceSheet) is a dependency-free Fortran
-port of the forward solver and the closures (`libplastic.a`), for coupling into Fortran
-models. It uses the same schemes (results were verified bit-identical against v0.1) and adds
-a warm start, OpenMP parallelism and a joint inversion of speed and SMB. The $\tau_b$
+port of the forward solver, the Coulomb yield law and the closures (`libplastic.a`), for
+coupling into Fortran models. It uses the same schemes (results were verified bit-identical
+against v0.1) and adds a warm start, OpenMP parallelism and a joint inversion of speed and
+SMB. The $\tau_b$
 inversion and the AD extension remain Julia-only.
